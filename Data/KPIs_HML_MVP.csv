@@ -1,0 +1,29 @@
+Metric Name,Table : Columns,SQL Query,Description
+"Claims by Type (Work Comp, Cargo, Crash)","Claims_Summary: [Accident or Incident Code], [Claim Number]","select [Accident or Incident Code] AS Type, COUNT(DISTINCT [Claim Number]) from PRD.CLAIMS_SUMMARY cs 
+ group by [Accident or Incident Code]","Shows the distribution of claims across different claim categories (e.g., Work Compensation, Cargo, Crash). Helps identify which types of claims occur most frequently."
+Claims by Driver by Date,"Claims_Summary: [Driver Name], [Occurrence Date], [Claim Number]","SELECT [Driver Name] , [Occurrence Date] AS Date, COUNT(DISTINCT [Claim Number]) FROM PRD.CLAIMS_SUMMARY cs 
+ WHERE [Occurrence Date] IS NOT NULL
+ GROUP BY [Driver Name] , [Occurrence Date]","Tracks which drivers were involved in claims on specific dates. Useful for spotting patterns, high-risk drivers, or repeated incidents on certain days."
+Gross Reserve by Driver by Date,"Claims_Summary: [Driver Name], [Occurrence Date], [Gross Reserve]","SELECT [Driver Name] , [Occurrence Date] AS Date, SUM([Gross Reserve]) AS [Gross Reserve]
+ FROM PRD.CLAIMS_SUMMARY 
+ WHERE [Occurrence Date] IS NOT NULL
+ GROUP BY [Driver Name] , [Occurrence Date] ",Shows the financial exposure (reserve amounts set aside) by driver per day. Useful for assessing which drivers are linked to higher reserve values and for financial risk monitoring.
+Total Open Claims this Week,"Claim_Summary: [Claim Number], [Occurrence Date]","SELECT COUNT(DISTINCT [Claim Number]) AS [Claims Count]
+FROM PRD.CLAIMS_SUMMARY cs
+WHERE [Occurrence Date] >= DATEADD(WEEK, DATEDIFF(WEEK, 0, GETUTCDATE()), 0)  -- start of current week (Monday 00:00)
+  AND [Occurrence Date] < DATEADD(WEEK, DATEDIFF(WEEK, 0, GETUTCDATE()) + 1, 0) -- start of next week
+  AND [Status Flag] = 'O';",Provides the total number of new open claims reported in the current calendar week. Helps track weekly claim trends and measure ongoing exposure.
+Claims by Adjuster,"Claims_Summary: [Last Updated AdjusterName], [Claim Number]","SELECT [Last Updated AdjusterName] AS Adjuster , COUNT(DISTINCT [Claim Number]) AS [Claims Count] FROM PRD.CLAIMS_SUMMARY cs 
+ GROUP BY [Last Updated AdjusterName] ",Shows how many claims are being managed by each adjuster. Useful for workload distribution and performance monitoring of adjusters.
+Claims by Status (Open/ Closed/ Reopened),"Claims_Summary: [Status Flag], [Claim Number]","SELECT CASE WHEN [Status Flag] = 'C' THEN 'Closed'
+ WHEN [Status Flag] = 'R' THEN 'Reopened'
+ WHEN [Status Flag] = 'O' THEN 'Opened'
+ WHEN [Status Flag] = 'I' THEN 'Incident'
+ ELSE [Status Flag] END AS [Claim Status]
+ , COUNT(DISTINCT [Claim Number]) AS [Claims Count]
+ FROM PRD.CLAIMS_SUMMARY
+ GROUP BY [Status Flag]
+ ","Provides a breakdown of claims by lifecycle stage. Useful for monitoring progress, backlog of open claims, and tracking reopened claims (quality/risk insight)."
+Claims by Driver Leader by Date,"Claims_Summary: [Driver Manager Name], [Occurrence Date], [Claim Number]","SELECT [Driver Manager Name] AS [Driver Leader Name] , [Occurrence Date] AS Date, COUNT(DISTINCT [Claim Number]) FROM PRD.CLAIMS_SUMMARY cs 
+ WHERE [Occurrence Date] IS NOT NULL
+ GROUP BY [Driver Manager Name], [Occurrence Date]",Shows claims under the responsibility of each driver leader on specific dates. Useful for leadership-level accountability and identifying managers with higher-risk teams.

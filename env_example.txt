@@ -1,0 +1,6 @@
+# Your .env file should contain this single line:
+
+SQL_CONNECTION_STRING="Driver={ODBC Driver 18 for SQL Server};Server=hmldatastore.database.windows.net;Database=Warehouse;Encrypt=yes;TrustServerCertificate=no;UID=BI_Reader;PWD=hepqir-3hybgrmu-wAvrhef"
+
+# That's it! Just one connection string following Microsoft's official format.
+# The code will automatically use this single connection string for all database operations.
