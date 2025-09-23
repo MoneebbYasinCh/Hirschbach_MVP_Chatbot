@@ -3,9 +3,20 @@ import os
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage, AIMessage
 import pandas as pd
+import logging
 
 # Load environment variables
 load_dotenv()
+
+# Reduce logging verbosity (suppress noisy network logs and SDK internals)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("langchain").setLevel(logging.WARNING)
+logging.getLogger("langgraph").setLevel(logging.WARNING)
+logging.getLogger("Graph_Flow").setLevel(logging.WARNING)
+logging.getLogger("Nodes").setLevel(logging.WARNING)
+logging.getLogger("azure").setLevel(logging.WARNING)
+logging.getLogger("azure.core").setLevel(logging.WARNING)
+logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
 
 # Simple create-and-run approach - no caching, no complexity
 def create_and_run_graph(user_input):
@@ -88,10 +99,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+
 def initialize_session_state():
     """Initialize Streamlit session state"""
     if 'messages' not in st.session_state:
         st.session_state.messages = []
+
 
 def main():
     """Main Streamlit app using LangGraph's built-in orchestration"""
@@ -104,20 +117,56 @@ def main():
     with st.sidebar:
         st.header("🔧 System Status")
         
-        # Check environment
-        connection_string = os.getenv("SQL_CONNECTION_STRING")
-        if connection_string:
-            st.success("✅ Azure SQL configured")
-        else:
-            st.error("❌ SQL_CONNECTION_STRING not found")
+        # Check environment variables
+        env_vars = {
+            "Azure OpenAI": (os.getenv("AZURE_OPENAI_ENDPOINT"), os.getenv("AZURE_OPENAI_API_KEY")),
+            "Azure Search": (os.getenv("AZURE_SEARCH_SERVICE_ENDPOINT"), os.getenv("AZURE_SEARCH_API_KEY")),
+            "Azure SQL": (os.getenv("SQL_CONNECTION_STRING"), None)
+        }
+        
+        for service, (endpoint, key) in env_vars.items():
+            if service == "Azure SQL":
+                if endpoint:
+                    st.success(f"✅ {service} configured")
+                else:
+                    st.error(f"❌ {service} not found")
+            else:
+                if endpoint and key:
+                    st.success(f"✅ {service} configured")
+                else:
+                    st.warning(f"⚠️ {service} incomplete")
         
         # System status
         st.success("✅ System ready")
         st.info("🚀 Fast create-and-run approach")
         
+        # Show current workflow status
+        if hasattr(st.session_state, 'last_result') and st.session_state.last_result:
+            result = st.session_state.last_result
+            st.subheader("📊 Last Execution")
+            
+            # Show which nodes were executed
+            if result.get("sql_generation_status"):
+                status = result.get("sql_generation_status")
+                color = "🟢" if status == "completed" else "🔴"
+                st.write(f"{color} SQL Generation: {status}")
+            
+            if result.get("kpi_editor_status"):
+                status = result.get("kpi_editor_status")
+                color = "🟢" if status == "completed" else "🔴"
+                st.write(f"{color} KPI Editor: {status}")
+            
+            if result.get("azure_retrieval_completed"):
+                st.write("🟢 Azure Retrieval: completed")
+            
+            if result.get("insights_generated"):
+                st.write("🟢 Insights: generated")
+        
         # Clear conversation button
         if st.button("🗑️ Clear Conversation"):
             st.session_state.messages = []
+            if hasattr(st.session_state, 'last_result'):
+                del st.session_state.last_result
             st.rerun()
     
     # Chat container
@@ -137,12 +186,37 @@ def main():
                 if message.get("has_data") and message.get("data") is not None:
                     st.markdown('<div class="data-section">', unsafe_allow_html=True)
                     st.subheader("📊 Retrieved Data")
+                    
+                    # Show execution details
+                    if message.get("execution_details"):
+                        details = message["execution_details"]
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Rows", f"{details.get('rows_returned', 0):,}")
+                        with col2:
+                            st.metric("Execution Time", details.get('execution_time', '0.0s'))
+                        with col3:
+                            st.metric("Status", "✅ Success" if details.get('success') else "❌ Failed")
+                    
+                    # Display the data
                     st.dataframe(message["data"], width='stretch')
                     
                     # Show row count
                     row_count = len(message['data'])
                     st.info(f"Total rows: {row_count:,}")
-                    st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    # Show SQL query if available
+                    if message.get("sql_query"):
+                        with st.expander("🔍 SQL Query Executed", expanded=False):
+                            st.code(message["sql_query"], language="sql")
+                else:
+                    # Show SQL query even if no data
+                    if message.get("sql_query"):
+                        st.markdown('<div class="data-section">', unsafe_allow_html=True)
+                        st.subheader("🔍 Generated SQL Query")
+                        st.code(message["sql_query"], language="sql")
+                        st.info("ℹ️ This query was generated but not executed (no data returned)")
+                        st.markdown('</div>', unsafe_allow_html=True)
                 
                 # Display insights if available
                 if message.get("has_insights") and message.get("insights"):
@@ -166,8 +240,32 @@ def main():
         
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Chat input
-    user_input = st.chat_input("Ask about accident trends, driver risk, or safety insights...")
+    # Suggested queries
+    st.subheader("💡 Try These Sample Queries")
+    col1, col2 = st.columns(2)
+    
+    sample_queries = [
+        "Show me accident trends by state for the last 6 months",
+        "Which drivers have the highest risk of preventable accidents?",
+        "What are the most common types of cargo claims?",
+        "Show me claims data filtered by status and coverage type",
+        "Which regions have the highest claim frequency?",
+        "Analyze accident patterns by driver experience level"
+    ]
+    
+    for i, query in enumerate(sample_queries):
+        with col1 if i % 2 == 0 else col2:
+            if st.button(f"🔍 {query[:40]}...", key=f"sample_{i}", help=query):
+                # Add the query to chat input
+                st.session_state.suggested_query = query
+                st.rerun()
+    
+    # Handle suggested query
+    if hasattr(st.session_state, 'suggested_query'):
+        user_input = st.session_state.suggested_query
+        del st.session_state.suggested_query
+    else:
+        user_input = st.chat_input("Ask about accident trends, driver risk, or safety insights...")
     
     if user_input:
         # Add user message
@@ -176,11 +274,11 @@ def main():
         # Process through LangGraph - simple create-and-run
         with st.spinner("Processing your request..."):
             try:
-                print(f"[APP] Processing: {user_input}")
                 # Create and run graph directly - no caching, no complexity
-                print("[APP] Creating graph...")
                 result = create_and_run_graph(user_input)
-                print("[APP] Graph execution completed!")
+                
+                # Store result for sidebar display
+                st.session_state.last_result = result
                 
                 # Extract response and data
                 final_response = result.get("final_response", "I've processed your request.")
@@ -193,10 +291,27 @@ def main():
                 # Check if we have data
                 has_data = False
                 data_df = None
+                execution_details = None
+                sql_query = None
+                
                 if azure_data.get("success") and azure_data.get("data"):
                     has_data = True
                     data_df = pd.DataFrame(azure_data["data"])
+                    execution_details = {
+                        "rows_returned": azure_data.get('rows_returned', 0),
+                        "execution_time": azure_data.get('execution_time', '0.0s'),
+                        "success": azure_data.get('success', False)
+                    }
+                    sql_query = azure_data.get('query_executed', '')
                     message_content += f"\n\n**Data Summary:** Retrieved {azure_data.get('rows_returned', 0)} rows in {azure_data.get('execution_time', '0.0s')}"
+                elif azure_data.get("error"):
+                    message_content += f"\n\n**Data Error:** {azure_data.get('error')}"
+                    sql_query = azure_data.get('query_executed', '')
+                else:
+                    # Check if we have SQL query even without data
+                    sql_query = result.get("generated_sql", "")
+                    if not sql_query and result.get("top_kpi"):
+                        sql_query = result.get("top_kpi", {}).get("sql_query", "")
                 
                 # Check if we have insights
                 has_insights = bool(insights and insights.get("key_findings"))
@@ -207,6 +322,8 @@ def main():
                     "content": message_content,
                     "has_data": has_data,
                     "data": data_df,
+                    "execution_details": execution_details,
+                    "sql_query": sql_query,
                     "has_insights": has_insights,
                     "insights": insights
                 })
@@ -227,10 +344,22 @@ def main():
         st.markdown("""
         **Hirschbach AI Risk Intelligence Platform using LangGraph orchestration:**
         
-        1. **Ask Questions**: Type your questions about risk intelligence
-        2. **AI Processing**: LangGraph automatically routes and processes your request
-        3. **Get Results**: See data, insights, and AI-generated recommendations
-        4. **Full Workflow**: Input → Orchestrator → Azure Retrieval → Insight Generation → Output
+        1. **Ask Questions**: Type your questions about risk intelligence in natural language
+        2. **AI Processing**: LangGraph automatically routes through:
+           - **Orchestrator**: Determines if you need existing KPI or new SQL generation
+           - **KPI Editor**: Modifies existing KPIs to match your request
+           - **SQL Generation**: Creates new SQL queries from scratch
+           - **Azure Retrieval**: Executes SQL and retrieves data from your database
+           - **Insight Generation**: Analyzes data and provides recommendations
+        3. **Get Results**: See data tables, SQL queries, and AI-generated insights
+        4. **Full Workflow**: Input → Orchestrator → (KPI Editor OR SQL Generation) → Azure Retrieval → Insight Generation → Output
+        
+        **Features:**
+        - ✅ **Smart Routing**: Automatically chooses between KPI editing and SQL generation
+        - ✅ **Real-time Data**: Direct connection to your Azure SQL database
+        - ✅ **AI Insights**: Automated analysis and recommendations
+        - ✅ **Query Transparency**: See exactly what SQL was executed
+        - ✅ **Performance Tracking**: Monitor execution times and row counts
         
         **This version uses LangGraph's built-in orchestration for optimal performance!**
         """)

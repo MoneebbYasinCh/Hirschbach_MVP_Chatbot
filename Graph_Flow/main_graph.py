@@ -81,7 +81,65 @@ class EndNode:
         
         self.logger.info(f"[END NODE] Final response: {state['final_response'][:100]}...")
         print(f"[END NODE] Final response: {state['final_response'][:100]}...")
+        
+        # Clear processing state while preserving essential data for UI
+        self._clear_processing_state(state)
+        print("[END NODE] Cleared processing state for next query")
+        
         return state
+    
+    def _clear_processing_state(self, state: HirschbachGraphState) -> None:
+        """
+        Clear processing state while preserving essential data for UI display
+        
+        Args:
+            state: Current state to clean
+        """
+        # Fields to preserve for UI display
+        preserve_fields = {
+            "messages",           # Chat history
+            "final_response",     # Final response for UI
+            "azure_data",         # Data results for UI tables
+            "generated_insights", # Insights for UI display
+            "workflow_status"     # Completion status
+        }
+        
+        # Fields to clear (processing state)
+        clear_fields = [
+            # Query processing
+            "user_query", "task", "orchestrator_decision",
+            
+            # KPI processing
+            "kpi_retrieval_completed", "top_kpi", "kpi_rag_results",
+            "kpi_editor_status", "kpi_editor_result", "kpi_editor_error",
+            "edited_kpi", "kpi_validated",
+            
+            # Metadata processing
+            "metadata_retrieval_completed", "metadata_rag_results",
+            
+            # LLM checker
+            "llm_check_result", "next_node",
+            
+            # SQL generation
+            "sql_generation_status", "sql_generation_result", "sql_generation_error",
+            "generated_sql", "sql_validated",
+            
+            # Azure retrieval processing flags
+            "azure_retrieval_completed", "insights_triggered", "kpi_processed",
+            
+            # Insight generation flags
+            "insights_generated", "kpi_insights_generated",
+            
+            # Error handling
+            "error_message", "aggregated_data"
+        ]
+        
+        # Clear processing fields
+        for field in clear_fields:
+            if field in state:
+                del state[field]
+                
+        print(f"[END NODE] Cleared {len(clear_fields)} processing fields, preserved {len(preserve_fields)} UI fields")
     
     def _generate_risk_summary(self, aggregated_data: List[Dict[str, Any]]) -> str:
         """
@@ -216,8 +274,8 @@ def create_main_graph():
         "llm_checker",
         route_after_llm_checker,
         {
-            "perfect_match": "azure_retrieval",
-            "needs_minor_edit": "kpi_editor",
+            "azure_retrieval": "azure_retrieval",
+            "kpi_editor": "kpi_editor",
             "sql_generation": "sql_generation"
         }
     )

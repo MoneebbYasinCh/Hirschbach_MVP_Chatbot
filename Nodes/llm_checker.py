@@ -12,7 +12,7 @@ class LLMCheckerNode:
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-07-18"),
-            temperature=0.1
+            temperature=0.0  # Remove randomness for consistent results
         )
     
     def __call__(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -20,122 +20,128 @@ class LLMCheckerNode:
         Intelligently decide what to do with the retrieved KPI based on how well it matches the user's task.
         Returns a decision type that determines the next path in the workflow.
         """
-        # Get user input from the latest message
-        messages = state.get("messages", [])
-        if messages:
-            task = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
-        else:
-            task = state.get("task", "")
+        
+        # Get user input - prioritize user_query from state over messages
+        task = state.get("user_query", "")
+        if not task:
+            # Fallback: Find the first HumanMessage in messages
+            messages = state.get("messages", [])
+            if messages:
+                # Look for the first human message (user's actual query)
+                for msg in messages:
+                    if hasattr(msg, 'content') and hasattr(msg, '__class__'):
+                        if 'Human' in str(msg.__class__):
+                            task = msg.content
+                            break
+                if not task:
+                    # Last resort: use the last message
+                    task = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
+            else:
+                task = state.get("task", "")
         
         # Get KPI results from the state
         top_kpi = state.get("top_kpi")
         
         if not top_kpi:
             # No KPIs found, proceed to SQL generation
-            return {
+            fallback_result = {
                 "llm_check_result": {
                     "decision_type": "not_relevant",
                     "reasoning": "No KPIs found in retrieval"
                 },
-                "next_node": "sql_gen"
+                "next_node": "sql_generation"
             }
+            state.update(fallback_result)
+            return state
+            
         kpi_metric = top_kpi.get("metric_name", "")
         kpi_description = top_kpi.get("description", "")
         kpi_sql = top_kpi.get("sql_query", "")
-        kpi_table_columns = top_kpi.get("table_columns", "")
         
-        # Create comprehensive prompt for intelligent decision making
+        # Simple, clean prompt - let the LLM decide naturally
         prompt = f"""
-        You are an expert at analyzing how well retrieved KPIs match user requests and deciding the best course of action.
-
         USER REQUEST: "{task}"
         
-        RETRIEVED KPI: "{kpi_metric}"
+        KPI NAME: "{kpi_metric}"
         KPI DESCRIPTION: {kpi_description}
-        KPI TABLE COLUMNS: {kpi_table_columns}
+        KPI SQL: {kpi_sql}
 
-        DECISION CRITERIA - Choose the most appropriate action:
+        Can this KPI completely answer the user's request?
 
-        1. **PERFECT_MATCH** → Use KPI directly
-           - KPI exactly matches what user is asking for
-           - No modifications needed
-           - High confidence the KPI will answer the user's question
+        - If the KPI can answer the request exactly as-is, without any modifications: return "perfect_match"
+        - If the KPI is relevant but needs minor modifications (filters, grouping, etc.): return "needs_minor_edit"  
+        - If the KPI is completely unrelated to the request: return "not_relevant"
 
-        2. **NEEDS_MINOR_EDIT** → Edit the KPI
-           - KPI is very close but needs small adjustments
-           - Same core concept but different filtering/grouping/metrics
-           - Can be improved with minor SQL modifications
+        Return only one word: perfect_match, needs_minor_edit, or not_relevant
 
-        3. **NOT_RELEVANT** → Use metadata retrieval
-           - KPI doesn't match the user's request
-           - Different concept entirely
-           - Better to generate new SQL from scratch
-
-        EXAMPLES (for claims_summary table):
-
-        PERFECT_MATCH:
-        - User: "show me closed claims by state" → KPI: "Closed Claims by State" → PERFECT_MATCH
-        - User: "total incurred amount by adjuster" → KPI: "Total Incurred by Adjuster" → PERFECT_MATCH
-
-        NEEDS_MINOR_EDIT:
-        - User: "show me closed claims this year" → KPI: "Closed Claims by State" → NEEDS_MINOR_EDIT (needs date filter)
-        - User: "claims by department last month" → KPI: "Claims by Department" → NEEDS_MINOR_EDIT (needs date filter)
-        - User: "high value claims" → KPI: "Claims by Amount" → NEEDS_MINOR_EDIT (needs amount threshold)
-
-        NOT_RELEVANT:
-        - User: "patient demographics" → KPI: "Claims by State" → NOT_RELEVANT
-        - User: "provider schedule" → KPI: "Claims by Adjuster" → NOT_RELEVANT
-        - User: "appointment data" → KPI: "Claims Metrics" → NOT_RELEVANT
-
-        ANALYSIS:
-        - User wants: {task}
-        - KPI provides: {kpi_metric}
+        For example (this is just one dummy example, there can be many other examples with variations):
         
-        Consider:
-        1. How well does the KPI concept match the user's intent?
-        2. Are the metrics, grouping, and filtering appropriate?
-        3. Would minor adjustments make it perfect?
-        4. Is it worth editing or better to start fresh?
+        if the KPI is: "Claims by Type (Work Comp, Cargo, Crash)"
+        and the KPI description is: "Shows the distribution of claims across different claim categories (e.g., Work Compensation, Cargo, Crash). Helps identify which types of claims occur most frequently."
+        and the KPI SQL is: "select [Accident or Incident Code] AS Type, COUNT(DISTINCT [Claim Number]) from PRD.CLAIMS_SUMMARY cs 
+        group by [Accident or Incident Code]"
+        and the user request is: "Show the distribution of claims across different claim categories"
+        then the response should be "perfect_match"
 
-        DECISION: [PERFECT_MATCH/NEEDS_MINOR_EDIT/NOT_RELEVANT]
-        REASONING: [Brief explanation of why you chose this decision]
-        CONFIDENCE: [HIGH/MEDIUM/LOW]
+        if the KPI is: "Claims by Type (Work Comp, Cargo, Crash)"
+        and the KPI description is: "Shows the distribution of claims across different claim categories (e.g., Work Compensation, Cargo, Crash). Helps identify which types of claims occur most frequently."
+        and the KPI SQL is: "select [Accident or Incident Code] AS Type, COUNT(DISTINCT [Claim Number]) from PRD.CLAIMS_SUMMARY cs 
+        group by [Accident or Incident Code]"
+        and the user request is: "Show the distribution of claims across different claim categories this month"
+        then the response should be "needs_minor_edit"
+
+        if the KPI is: "Claims by Type (Work Comp, Cargo, Crash)"
+        and the KPI description is: "Shows the distribution of claims across different claim categories (e.g., Work Compensation, Cargo, Crash). Helps identify which types of claims occur most frequently."
+        and the KPI SQL is: "select [Accident or Incident Code] AS Type, COUNT(DISTINCT [Claim Number]) from PRD.CLAIMS_SUMMARY cs 
+        group by [Accident or Incident Code]"
+        and the user request is: "Can you please provide me the number of preventable claims for the current month?"
+        then the response should be "not_relevant"
         """
         
         try:
             response = self.llm.invoke(prompt)
             response_text = response.content.strip()
             
-            # Parse the response
-            decision_type, reasoning, confidence = self._parse_decision_response(response_text)
+            # Simple word detection - no complex parsing needed
+            decision_word = response_text.lower().strip()
             
-            # Determine next node based on decision
-            if decision_type == "perfect_match":
-                next_node = "aws_retrieval"
-            elif decision_type == "needs_minor_edit":
+            # Validate and clean the response
+            if decision_word == "perfect_match":
+                decision_type = "perfect_match"
+                next_node = "azure_retrieval"
+            elif decision_word == "needs_minor_edit":
+                decision_type = "needs_minor_edit"
                 next_node = "kpi_editor"
-            else:  # not_relevant
-                next_node = "sql_gen"
+            elif decision_word == "not_relevant":
+                decision_type = "not_relevant"
+                next_node = "sql_generation"
+            else:
+                # Fallback if LLM didn't follow instructions
+                print(f"⚠️ [LLM_CHECKER] Unexpected response: '{response_text}' - defaulting to not_relevant")
+                decision_type = "not_relevant"
+                next_node = "sql_generation"
             
             llm_check_result = {
                 "decision_type": decision_type,
-                "reasoning": reasoning,
-                "confidence": confidence,
+                "reasoning": f"LLM decision based on KPI-request match",
+                "confidence": "HIGH",
                 "kpi_metric": kpi_metric,
                 "kpi_sql": kpi_sql,
-                "kpi_table_columns": kpi_table_columns,
             }
             
             print(f"🧠 [LLM_CHECKER] Decision: {decision_type.upper()} → {next_node}")
             print(f"  Task: {task}")
             print(f"  KPI: {kpi_metric}")
-            print(f"  Confidence: {confidence}")
-            print(f"  Reasoning: {reasoning}")
             
-            return {
-                "llm_check_result": llm_check_result,
-                "next_node": next_node
-            }
+            # If perfect match, also show the SQL that will be executed
+            if decision_type == "perfect_match" and kpi_sql:
+                print(f"📝 [LLM_CHECKER] SQL to execute: {kpi_sql}")
+            
+            # Update state and return it
+            state["llm_check_result"] = llm_check_result
+            state["next_node"] = next_node
+            
+            return state
             
         except Exception as e:
             # Fallback to conservative decision
@@ -145,31 +151,12 @@ class LLMCheckerNode:
                 "confidence": "LOW",
                 "kpi_metric": kpi_metric,
                 "kpi_sql": kpi_sql,
-                "kpi_table_columns": kpi_table_columns,
             }
             
             print(f"❌ [LLM_CHECKER] Error: {str(e)} - Using fallback decision")
-            return {
-                "llm_check_result": fallback_result,
-                "next_node": "sql_gen"
-            }
-    
-    def _parse_decision_response(self, response_text: str) -> tuple[str, str, str]:
-        """Parse the LLM response to extract decision type, reasoning, and confidence"""
-        lines = response_text.split('\n')
-        decision_type = "not_relevant"  # Default fallback
-        reasoning = "Unable to parse response"
-        confidence = "LOW"
-        
-        for line in lines:
-            line = line.strip()
-            if line.startswith("DECISION:"):
-                decision = line.replace("DECISION:", "").strip().upper()
-                if decision in ["PERFECT_MATCH", "NEEDS_MINOR_EDIT", "NOT_RELEVANT"]:
-                    decision_type = decision.lower()
-            elif line.startswith("REASONING:"):
-                reasoning = line.replace("REASONING:", "").strip()
-            elif line.startswith("CONFIDENCE:"):
-                confidence = line.replace("CONFIDENCE:", "").strip().upper()
-        
-        return decision_type, reasoning, confidence
+            
+            # Update state and return it
+            state["llm_check_result"] = fallback_result
+            state["next_node"] = "sql_generation"
+            
+            return state

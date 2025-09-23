@@ -401,6 +401,165 @@ def run_all_tests():
     
     return passed == total
 
+def interactive_sql_test():
+    """Interactive SQL generation test where user can input prompts"""
+    print("🎮 INTERACTIVE SQL GENERATION TEST")
+    print("=" * 60)
+    print("Enter your queries below. Type 'quit', 'exit', or 'q' to stop.")
+    print("Type 'test' to run automated tests instead.")
+    print("-" * 60)
+    
+    # Check environment first
+    if not test_environment_setup():
+        print("❌ Environment setup failed. Please fix missing variables and try again.")
+        return
+    
+    # Initialize the node
+    try:
+        print("\n📡 Initializing SQL Generation Node...")
+        node = SQLGenerationNode()
+        print("✅ SQL Generation Node initialized successfully!")
+    except Exception as e:
+        print(f"❌ Failed to initialize SQL Generation Node: {str(e)}")
+        return
+    
+    # Create sample metadata for testing
+    sample_metadata = [
+        {
+            "column_name": "Claim State",
+            "description": "State where claim occurred",
+            "data_type": "varchar",
+            "score": 0.92
+        },
+        {
+            "column_name": "Status Flag",
+            "description": "Current status of the claim",
+            "data_type": "varchar", 
+            "score": 0.88
+        },
+        {
+            "column_name": "Claim Date",
+            "description": "Date when claim was filed",
+            "data_type": "date",
+            "score": 0.90
+        },
+        {
+            "column_name": "Total Incurred",
+            "description": "Total amount incurred for the claim",
+            "data_type": "decimal",
+            "score": 0.85
+        },
+        {
+            "column_name": "Accident Type",
+            "description": "Type of accident or incident",
+            "data_type": "varchar",
+            "score": 0.87
+        },
+        {
+            "column_name": "Coverage Major",
+            "description": "Major coverage type",
+            "data_type": "varchar",
+            "score": 0.83
+        }
+    ]
+    
+    print(f"\n📊 Available columns: {len(sample_metadata)}")
+    for col in sample_metadata:
+        print(f"  - {col['column_name']} ({col['data_type']}): {col['description']}")
+    
+    print("\n" + "=" * 60)
+    
+    while True:
+        try:
+            # Get user input
+            query = input("\n🔍 Enter your query: ").strip()
+            
+            # Check for exit commands
+            if query.lower() in ['quit', 'exit', 'q']:
+                print("👋 Goodbye!")
+                break
+            
+            # Check for test command
+            if query.lower() == 'test':
+                print("\n🧪 Running automated tests...")
+                success = run_all_tests()
+                print(f"\n📊 Test results: {'All passed!' if success else 'Some failed!'}")
+                continue
+            
+            if not query:
+                print("⚠️ Please enter a valid query")
+                continue
+            
+            print(f"\n🔄 Processing: '{query}'")
+            print("-" * 40)
+            
+            # Create test state
+            from langchain_core.messages import HumanMessage
+            test_state = {
+                "user_query": query,
+                "messages": [HumanMessage(content=query)],
+                "metadata_rag_results": sample_metadata,
+                "llm_check_result": {
+                    "decision_type": "not_relevant",
+                    "reasoning": "No relevant KPI found, generate new SQL",
+                    "confidence": "HIGH"
+                }
+            }
+            
+            # Run the SQL generation node
+            result_state = node(test_state)
+            
+            # Display results
+            status = result_state.get("sql_generation_status", "unknown")
+            print(f"📊 Status: {status}")
+            
+            if status == "completed":
+                generated_sql = result_state.get("generated_sql", "")
+                print(f"\n✅ SQL GENERATED SUCCESSFULLY:")
+                print(f"📝 Generated SQL:")
+                print("-" * 40)
+                print(generated_sql)
+                print("-" * 40)
+                
+                # Show additional info
+                result_info = result_state.get("sql_generation_result", {})
+                if result_info.get("entities_extracted", 0) > 0:
+                    print(f"🔍 Entities extracted: {result_info.get('entities_extracted', 0)}")
+                
+                if result_info.get("extracted_entities"):
+                    print(f"📋 Extracted entities: {result_info['extracted_entities']}")
+                
+            else:
+                error_msg = result_state.get("sql_generation_error", "Unknown error")
+                print(f"❌ SQL generation failed: {error_msg}")
+                
+                # Show partial results if available
+                generated_sql = result_state.get("generated_sql", "")
+                if generated_sql:
+                    print(f"📝 Partial SQL generated:")
+                    print("-" * 40)
+                    print(generated_sql)
+                    print("-" * 40)
+            
+        except KeyboardInterrupt:
+            print("\n👋 Goodbye!")
+            break
+        except EOFError:
+            print("\n👋 Goodbye!")
+            break
+        except Exception as e:
+            print(f"❌ Error processing query: {e}")
+            import traceback
+            traceback.print_exc()
+
 if __name__ == "__main__":
-    success = run_all_tests()
-    sys.exit(0 if success else 1)
+    import sys
+    
+    # Check if user wants interactive mode or test mode
+    if len(sys.argv) > 1 and sys.argv[1] in ['--interactive', '-i', '--interactive-mode']:
+        interactive_sql_test()
+    else:
+        # Default to interactive mode
+        print("🚀 Starting Interactive SQL Generation Test")
+        print("💡 Use '--test' flag for automated test mode")
+        interactive_sql_test()

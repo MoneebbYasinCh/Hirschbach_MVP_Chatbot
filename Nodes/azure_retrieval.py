@@ -31,24 +31,43 @@ class AzureRetrievalNode:
         self.logger.info("[AZURE RETRIEVAL] Processing Azure data retrieval...")
         print("[AZURE RETRIEVAL] Processing Azure data retrieval...")
         
-        # Get validated results from SQL checker
+        # Get SQL and validation results from various sources
         sql_validated = state.get("sql_validated", False)
         kpi_validated = state.get("kpi_validated", False)
         generated_sql = state.get("generated_sql", "")
         edited_kpi = state.get("edited_kpi", {})
+        top_kpi = state.get("top_kpi", {})
         
+        # Determine SQL to execute - check multiple sources
+        sql_to_execute = ""
+        
+        # Priority 1: Use validated generated SQL (from SQL generation or KPI editor)
         if sql_validated and generated_sql:
-            self.logger.info(f"[AZURE RETRIEVAL] Executing SQL query: {generated_sql[:100]}...")
-            print(f"[AZURE RETRIEVAL] Executing SQL query: {generated_sql[:100]}...")
+            sql_to_execute = generated_sql
+            print(f"[AZURE RETRIEVAL] Using validated generated SQL: {sql_to_execute[:100]}...")
+        
+        # Priority 2: Use KPI SQL directly (perfect match scenario)
+        elif top_kpi.get("sql_query"):
+            sql_to_execute = top_kpi.get("sql_query")
+            print(f"[AZURE RETRIEVAL] Using KPI SQL: {sql_to_execute[:100]}...")
+        
+        # Priority 3: Use any generated SQL (even if not validated)
+        elif generated_sql:
+            sql_to_execute = generated_sql
+            print(f"[AZURE RETRIEVAL] Using unvalidated generated SQL: {sql_to_execute[:100]}...")
+        
+        if sql_to_execute:
+            self.logger.info(f"[AZURE RETRIEVAL] Executing SQL query: {sql_to_execute[:100]}...")
+            print(f"[AZURE RETRIEVAL] Executing SQL query: {sql_to_execute[:100]}...")
             
             try:
                 # Execute SQL query and get results
-                query_results = self._execute_sql_query(generated_sql)
+                query_results = self._execute_sql_query(sql_to_execute)
                 
                 if query_results is not None:
                     state["azure_retrieval_completed"] = True
                     state["azure_data"] = {
-                        "query_executed": generated_sql,
+                        "query_executed": sql_to_execute,
                         "rows_returned": query_results.get("row_count", 0),
                         "execution_time": query_results.get("execution_time", "0.0s"),
                         "data": query_results.get("data", []),
@@ -65,7 +84,7 @@ class AzureRetrievalNode:
                 else:
                     state["azure_retrieval_completed"] = False
                     state["azure_data"] = {
-                        "query_executed": generated_sql,
+                        "query_executed": sql_to_execute,
                         "error": "Query execution failed",
                         "success": False
                     }
@@ -76,7 +95,7 @@ class AzureRetrievalNode:
                 print(f"[AZURE RETRIEVAL] Error executing query: {str(e)}")
                 state["azure_retrieval_completed"] = False
                 state["azure_data"] = {
-                    "query_executed": generated_sql,
+                    "query_executed": sql_to_execute,
                     "error": str(e),
                     "success": False
                 }

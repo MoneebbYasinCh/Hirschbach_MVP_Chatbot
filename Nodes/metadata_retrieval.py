@@ -17,7 +17,7 @@ class MetadataRetrievalNode:
     def __init__(self):
         # Initialize Azure OpenAI client
         api_version = os.getenv("AZURE_OPENAI_API_VERSION")
-        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
+        deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
         
         if api_version:
             self.llm = AzureChatOpenAI(
@@ -317,6 +317,18 @@ class MetadataRetrievalNode:
         retrieved_columns = self._iterative_metadata_retrieval(task)
 
         print(f"[METADATA RETRIEVAL] Retrieved {len(retrieved_columns)} columns")
+        
+        # Print the retrieved columns
+        if retrieved_columns:
+            print("📋 [METADATA RETRIEVAL] Retrieved columns:")
+            for i, col in enumerate(retrieved_columns, 1):
+                col_name = col.get('column_name', 'Unknown')
+                col_desc = col.get('description', 'No description')
+                col_type = col.get('data_type', 'Unknown type')
+                col_score = col.get('score', 0)
+                print(f"  {i}. {col_name} ({col_type}) - {col_desc} (score: {col_score:.2f})")
+        else:
+            print("⚠️ [METADATA RETRIEVAL] No columns retrieved")
         
         # Update state with results
         state["metadata_rag_results"] = retrieved_columns
