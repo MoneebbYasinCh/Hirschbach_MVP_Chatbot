@@ -32,7 +32,19 @@ class KPIEditorNode:
             print("[KPI_EDITOR] No messages found")
             return self._set_error_state(state, "No messages found in state")
         
-        task = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
+        # Get user input from the first HumanMessage (proper LangGraph pattern)
+        task = ""
+        for msg in messages:
+            if hasattr(msg, 'content') and hasattr(msg, '__class__'):
+                if 'Human' in str(msg.__class__):
+                    task = msg.content
+                    break
+        
+        if not task:
+            # Fallback: use the last message
+            task = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
+        
+        print(f"🔍 [KPI_EDITOR] Extracted task: '{task}'")
         
         # Get KPI data from state
         top_kpi = state.get("top_kpi")
@@ -52,11 +64,11 @@ class KPIEditorNode:
         print(f"[KPI_EDITOR] Original SQL: {original_sql[:100]}...")
         
         try:
-            # Step 1: Analyze what columns are needed
-            needed_columns = self._analyze_needed_columns_step1(task, metadata_results)
+            # Step 1: Analyze what additional columns are needed
+            needed_columns = self._analyze_needed_columns_step1(task, metadata_results, original_sql)
             
             # Step 2: Intelligently decide which columns need entity mapping
-            columns_needing_mapping = self._analyze_columns_needing_mapping(task, needed_columns, metadata_results)
+            columns_needing_mapping = self._analyze_columns_needing_mapping(task, needed_columns)
             
             # Step 3: Get exact values only for columns that need mapping
             entity_mapping_data = self._get_entity_mapping_data(columns_needing_mapping)
@@ -124,8 +136,8 @@ class KPIEditorNode:
         return state
     
     
-    def _analyze_needed_columns_step1(self, task: str, metadata_results: List[Dict[str, Any]]) -> List[str]:
-        """Intelligently pick columns from metadata results based on task and column descriptions"""
+    def _analyze_needed_columns_step1(self, task: str, metadata_results: List[Dict[str, Any]], original_sql: str) -> List[str]:
+        """Intelligently pick additional columns from metadata results based on task, existing SQL, and column descriptions"""
         needed_columns = []
         
         if not metadata_results:
@@ -143,18 +155,27 @@ class KPIEditorNode:
         # Get available column names
         available_columns = [col.get('column_name', '') for col in metadata_results if col.get('column_name')]
         
-        # Smart selection prompt using column descriptions
+        # Smart selection prompt that considers existing SQL and user task
         analysis_prompt = f"""
         Task: "{task}"
         
-        Available columns from metadata retrieval:
+        Current KPI SQL Query:
+        {original_sql}
+        
+        Available additional columns from metadata retrieval:
         {chr(10).join(column_details)}
         
-        Based on the task and column descriptions, select which columns are needed for filtering, grouping, or analyzing the data.
+        ANALYSIS: 
+        1. First, analyze what columns are already used in the current SQL query
+        2. Then, based on the user task, determine what ADDITIONAL columns are needed for filtering, grouping, or analyzing the data
+        3. Only select columns that are NOT already in the SQL query but are needed for the user's request
         
         Available column names: {', '.join(available_columns)}
+
+        examples:
+        - "show distribution of claims across different claim categories this month" → Create Time (filter for this month)
         
-        Return only the exact column names from the list above, separated by commas. If no additional columns are needed, return "none".
+        Return only the exact column names from the list above that are needed as ADDITIONS to the existing SQL, separated by commas. If no additional columns are needed, return "none".
         """
         
         try:
@@ -169,68 +190,78 @@ class KPIEditorNode:
                 for col in selected_columns:
                     if col in available_columns and col not in needed_columns:
                         needed_columns.append(col)
-                        print(f"🔧 [KPI_EDITOR] Selected column: {col}")
+                        print(f"🔧 [KPI_EDITOR] Selected additional column: {col}")
             
         except Exception as e:
             print(f"⚠️ [KPI_EDITOR] Error analyzing needed columns: {str(e)}")
         
         if not needed_columns:
-            print("🔧 [KPI_EDITOR] No additional columns needed")
+            print("🔧 [KPI_EDITOR] No additional columns needed - existing SQL is sufficient")
         
         return needed_columns
     
-    def _analyze_columns_needing_mapping(self, task: str, needed_columns: List[str], metadata_results: List[Dict[str, Any]]) -> List[str]:
+    def _analyze_columns_needing_mapping(self, task: str, needed_columns: List[str]) -> List[str]:
         """Intelligently decide which columns actually need entity mapping based on user request"""
         if not needed_columns:
             return []
         
-        # Create column details for LLM analysis
-        column_details = []
-        for col_data in metadata_results:
-            col_name = col_data.get('column_name', '')
-            if col_name in needed_columns:
-                col_desc = col_data.get('description', 'No description')
-                col_type = col_data.get('data_type', 'Unknown')
-                column_details.append(f"- {col_name} ({col_type}): {col_desc}")
-        
         analysis_prompt = f"""
         User request: "{task}"
         
-        Available columns that might be used:
-        {chr(10).join(column_details)}
+        Available columns: {', '.join(needed_columns)}
         
-        TASK: Determine which columns need entity mapping (exact value lookup from database).
+        CRITICAL: You MUST identify ANY specific constraints the user mentions, even if the main request seems generic.
         
-        NEED MAPPING if user mentions:
-        - Specific status values: "closed", "open", "pending", "resolved"
-        - Specific customer names/codes: "customer ABC", "client XYZ" 
-        - Specific claim types: "Work Comp", "Cargo", "Crash"
-        - Specific locations/regions: "Texas", "North region", "warehouse A"
-        - Specific departments: "IT department", "Sales team"
-        - Any exact categorical values that need database lookup
+        NEED SPECIFIC HANDLING if user mentions ANY of these:
         
-        DON'T NEED MAPPING if request is generic:
-        - "show claims by type" (generic grouping)
-        - "group by status" (generic aggregation)  
-        - "filter by date" (date/time filtering)
-        - "count by customer" (generic counting)
+        1. TEMPORAL CONSTRAINTS (ALWAYS needs specific handling):
+           - "this month", "last week", "today", "yesterday", "this year", "last month"
+           - "for this month specifically", "current month", "recent claims"
+           - ANY time-based filtering requirement
         
-        EXAMPLES:
-        - "show closed claims" → Status Flag (needs mapping for "closed")
-        - "claims for customer ABC" → Customer Code (needs mapping for "ABC")
-        - "Work Comp claims by adjuster" → Claim Type (needs mapping for "Work Comp")
+        2. CATEGORICAL VALUES (specific values mentioned):
+           - Status: "closed", "open", "pending", "resolved" 
+           - Claim types: "Work Comp", "Cargo", "Crash", "Other"
+           - Customer codes: "ABC123", "XYZ789", specific customer names
+           - Locations: "Texas", "California", "North region", specific cities
+        
+        3. NUMERIC FILTERS (value-based constraints):
+           - "over $10k", "high-value", "expensive claims", "low-cost"
+           - "critical claims", "major incidents", "significant amounts"
+        
+        4. CONDITIONAL LOGIC (specific conditions):
+           - "preventable", "critical", "divided highway", "minor"
+           - "warehouse incidents", "roadway crashes", "close quarters"
+        
+        DON'T NEED SPECIFIC HANDLING only if:
+        - Purely generic grouping: "show claims by type" (no specific values)
+        - Generic aggregation: "group by status" (no specific status mentioned)
+        - Generic counting: "count by customer" (no specific customer)
+        
+        REAL EXAMPLES FROM DATA:
+        - "this month specifically" → Occurrence Date (temporal constraint)
+        - "show closed claims" → Status Flag (categorical: "closed")
+        - "Work Comp claims" → Accident or Incident Code (categorical: "Work Comp")
+        - "claims in Texas" → Claim City (categorical: "Texas")
+        - "high-value claims" → Actual Recovered Amount (numeric filter)
+        - "critical claims only" → Is Critical Flag (conditional: 1)
         - "show claims by type" → none (generic grouping)
-        - "group by status" → none (generic grouping)
         
         ANALYSIS FOR: "{task}"
-        Which specific values does the user mention that need exact database lookup?
+        Look for ANY specific constraints, temporal references, exact values, or conditions mentioned.
         
-        Return column names that need mapping, separated by commas. If none, return "none".
+        Return column names that need specific handling, separated by commas. If none, return "none".
         """
         
         try:
+            print(f"🔍 [KPI_EDITOR] Step 2 Input - Task: '{task}'")
+            print(f"🔍 [KPI_EDITOR] Step 2 Input - Available columns: {needed_columns}")
+            print(f"🔍 [KPI_EDITOR] Step 2 Prompt Preview: {analysis_prompt[:200]}...")
+            
             response = self.llm.invoke(analysis_prompt)
             analysis_result = response.content.strip()
+            
+            print(f"🔍 [KPI_EDITOR] Step 2 LLM Response: '{analysis_result}'")
             
             columns_needing_mapping = []
             if analysis_result.lower() != "none" and analysis_result:
@@ -241,10 +272,10 @@ class KPIEditorNode:
                 for col in selected_columns:
                     if col in needed_columns and col not in columns_needing_mapping:
                         columns_needing_mapping.append(col)
-                        print(f"🔍 [KPI_EDITOR] Column needs mapping: {col}")
+                        print(f"🔍 [KPI_EDITOR] Column needs specific handling: {col}")
             
             if not columns_needing_mapping:
-                print("🔍 [KPI_EDITOR] No columns need entity mapping - using generic approach")
+                print("🔍 [KPI_EDITOR] No columns need specific handling - using generic approach")
             
             return columns_needing_mapping
             
@@ -254,36 +285,59 @@ class KPIEditorNode:
             return needed_columns
     
     def _map_user_intent_to_values_step2(self, task: str, needed_columns: List[str], entity_mapping_data: str) -> Dict[str, Any]:
-        """Step 2: Map user intent to exact values using LLM"""
+        """Step 4: Map user intent to exact values and logic using LLM"""
         if not needed_columns:
             return {}
         
-        # Simple mapping prompt
+        # Enhanced mapping prompt for temporal, numeric, and categorical logic
         prompt = f"""
         User request: "{task}"
         Columns: {', '.join(needed_columns)}
         Available values: {entity_mapping_data}
         
-        Map user intent to exact values. Format: Column1: value1, Column2: value2
+        Map user intent to exact values and logic. Handle:
+        1. Categorical values: "closed" → "Closed"
+        2. Temporal logic: "this month" → "current_month"
+        3. Numeric filters: "over $10k" → "amount > 10000"
+        4. Conditional logic: "critical" → "is_critical = 1"
+        
+        Format: Column1: logic_type:value, Column2: logic_type:value
+        
+        Examples:
+        - Status Flag: categorical:Closed
+        - Occurrence Date: temporal:current_month
+        - Claim Amount: numeric:>10000
+        - Is Critical Flag: conditional:1
         """
         
         try:
             response = self.llm.invoke(prompt)
             mapping_result = response.content.strip()
             
-            # Parse the mapping result
+            # Parse the mapping result with logic types
             mapped_values = {}
             for line in mapping_result.split('\n'):
                 if ':' in line:
-                    column, values = line.split(':', 1)
+                    column, logic_spec = line.split(':', 1)
                     column = column.strip()
-                    values = values.strip()
+                    logic_spec = logic_spec.strip()
                     
-                    if values != "unclear":
-                        # Parse multiple values if comma-separated
-                        value_list = [v.strip() for v in values.split(',') if v.strip()]
-                        mapped_values[column] = value_list
-                        print(f"🔧 [KPI_EDITOR] Mapped {column} to: {value_list}")
+                    if logic_spec != "unclear":
+                        # Parse logic_type:value format
+                        if ':' in logic_spec:
+                            logic_type, value = logic_spec.split(':', 1)
+                            mapped_values[column] = {
+                                'type': logic_type.strip(),
+                                'value': value.strip()
+                            }
+                            print(f"🔧 [KPI_EDITOR] Mapped {column} to: {logic_type.strip()}:{value.strip()}")
+                        else:
+                            # Fallback for simple values
+                            mapped_values[column] = {
+                                'type': 'categorical',
+                                'value': logic_spec
+                            }
+                            print(f"🔧 [KPI_EDITOR] Mapped {column} to: categorical:{logic_spec}")
                     else:
                         print(f"⚠️ [KPI_EDITOR] Could not map {column} - unclear intent")
             
@@ -296,10 +350,30 @@ class KPIEditorNode:
     def _create_sql_generation_prompt_step3(self, task: str, kpi_metric: str, kpi_description: str, original_sql: str, metadata_results: List[Dict[str, Any]], mapped_values: Dict[str, Any]) -> str:
         """Step 3: Create focused SQL generation prompt"""
         
-        # Format mapped values
+        # Format mapped values with logic types
         values_text = ""
         if mapped_values:
-            values_text = f"Use these exact values: {mapped_values}"
+            logic_instructions = []
+            for column, logic_info in mapped_values.items():
+                logic_type = logic_info.get('type', 'categorical')
+                value = logic_info.get('value', '')
+                
+                if logic_type == 'temporal':
+                    if value == 'current_month':
+                        logic_instructions.append(f"{column}: Add WHERE MONTH([{column}]) = MONTH(GETDATE()) AND YEAR([{column}]) = YEAR(GETDATE())")
+                    elif value == 'current_week':
+                        logic_instructions.append(f"{column}: Add WHERE [{column}] >= DATEADD(week, -1, GETDATE())")
+                    elif value == 'today':
+                        logic_instructions.append(f"{column}: Add WHERE [{column}] = CAST(GETDATE() AS DATE)")
+                elif logic_type == 'numeric':
+                    logic_instructions.append(f"{column}: Add WHERE [{column}] {value}")
+                elif logic_type == 'conditional':
+                    logic_instructions.append(f"{column}: Add WHERE [{column}] = {value}")
+                elif logic_type == 'categorical':
+                    logic_instructions.append(f"{column}: Add WHERE [{column}] = '{value}'")
+            
+            if logic_instructions:
+                values_text = f"Apply these specific logic rules:\n" + "\n".join(logic_instructions)
         
         # Format metadata for prompt
         if metadata_results:
@@ -315,22 +389,32 @@ class KPIEditorNode:
             metadata_text = "No metadata available"
         
         return f"""
-        DONOT REWRITE THE SQL QUERY, ONLY MODIFY IT TO MATCH THE USER REQUEST.
-        If only a simple modification is needed, do not rewrite the entire SQL query. Only add the necessary modifications to the original SQL query. Keep the changes minimal and relevant.
-        Modify this SQL to match the user request: "{task}"
-        
+        TASK: Modify the original SQL query to match the user request: "{task}"
+        CRITICAL: Answer with ONLY the SQL query. No explanations, no markdown, no code blocks, no additional text.
+        Just the pure SQL statement.
         Original KPI: {kpi_metric}
         Original SQL: {original_sql}
         
         Available columns: {metadata_text}
         {values_text}
         
+        INSTRUCTIONS:
+        1. Start with the original SQL query
+        2. Add necessary WHERE clauses or other modifications
+        3. Keep the original SELECT and FROM structure
+        4. Only add the minimal changes needed to fulfill the user request
+        
+        CRITICAL SQL SERVER SYNTAX RULES:
+        - ALL column names with spaces MUST be wrapped in square brackets: [Column Name]
+        - Use proper SQL Server date functions: MONTH(), YEAR(), GETDATE()
+        - For date filtering, use: WHERE ["any date column"] >= 'YYYY-MM-DD' AND ["any date column"] < 'YYYY-MM-DD'
+        
         IMPORTANT SQL SERVER BIT COLUMN HANDLING:
         If any columns are of type 'bit' (e.g., [Preventable Flag], [Is Critical Flag], [Is Divided Highway Flag]), 
         you cannot use aggregate functions like MAX(), MIN(), SUM(), AVG() directly on bit columns in SQL Server.
         Instead, convert bit to int first: MAX(CAST([column_name] AS INT)) or use CASE statements for filtering.
         
-        Return only the modified SQL query.
+        
         """
     
     def _get_entity_mapping_data(self, needed_columns: List[str]) -> str:
