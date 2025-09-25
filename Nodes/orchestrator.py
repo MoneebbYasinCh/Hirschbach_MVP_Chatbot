@@ -187,7 +187,7 @@ class HirschbachOrchestrator:
             Response string about data analysis
         """
         # Simple, direct response - no verbose messaging
-        return "Analyzing claims data..."
+        return ""
     
     
     

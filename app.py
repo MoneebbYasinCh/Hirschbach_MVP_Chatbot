@@ -1,38 +1,48 @@
 import streamlit as st
 import os
 from dotenv import load_dotenv
-from typing import Dict, Any, List
 from langchain_core.messages import HumanMessage, AIMessage
-import json
-import time
-
-# Enable caching for better performance
-@st.cache_resource
-def load_graph():
-    """Load the graph with caching to improve performance"""
-    try:
-        from Graph_Flow.main_graph import create_main_graph
-        return create_main_graph()
-    except Exception as e:
-        st.error(f"Error loading graph: {str(e)}")
-        return None
+import pandas as pd
+import logging
 
 # Load environment variables
 load_dotenv()
 
-# Import our custom modules
-from Graph_Flow.main_graph import create_main_graph
-from State.main_state import RCMState
+# Reduce logging verbosity (suppress noisy network logs and SDK internals)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("langchain").setLevel(logging.WARNING)
+logging.getLogger("langgraph").setLevel(logging.WARNING)
+logging.getLogger("Graph_Flow").setLevel(logging.WARNING)
+logging.getLogger("Nodes").setLevel(logging.WARNING)
+logging.getLogger("azure").setLevel(logging.WARNING)
+logging.getLogger("azure.core").setLevel(logging.WARNING)
+logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
+
+# Simple create-and-run approach - no caching, no complexity
+def create_and_run_graph(user_input):
+    """Create graph and run it directly - fast and simple"""
+    from Graph_Flow.main_graph import create_main_graph
+    
+    # Create graph fresh each time
+    graph = create_main_graph()
+    
+    # Run it immediately
+    config = {"configurable": {"thread_id": "user_session"}}
+    inputs = {
+        "messages": [HumanMessage(content=user_input)],
+        "user_query": user_input  # Store the original user query
+    }
+    
+    return graph.invoke(inputs, config)
 
 # Page configuration
 st.set_page_config(
     page_title="Hirschbach AI Risk Intelligence Platform",
     page_icon="🚛",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-# Custom CSS for better UI
+# Custom CSS
 st.markdown("""
 <style>
     .main-header {
@@ -42,370 +52,302 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem;
     }
-    .chat-message {
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin: 0.5rem 0;
-        border-left: 4px solid #1f77b4;
-        color: #000000;
+    .chat-scroll {
+        max-height: 60vh;
+        overflow-y: auto;
+        padding-right: 10px;
+        margin-bottom: 1rem;
     }
     .user-message {
-        background-color: #e3f2fd;
-        border-left-color: #2196f3;
-        color: #000000;
-    }
-    .assistant-message {
-        background-color: #f3e5f5;
-        border-left-color: #9c27b0;
-        color: #000000;
-    }
-    .status-indicator {
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.25rem;
-        font-size: 0.8rem;
-        font-weight: bold;
-    }
-    .status-active {
-        background-color: #4caf50;
+        background-color: #007bff;
         color: white;
+        padding: 12px 16px;
+        border-radius: 18px 18px 4px 18px;
+        margin: 8px 0 8px auto;
+        max-width: 70%;
+        text-align: right;
+        word-break: break-word;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        line-height: 1.4;
     }
-    .status-complete {
-        background-color: #2196f3;
-        color: white;
+    .bot-message {
+        background-color: #f8f9fa;
+        color: #212529;
+        padding: 12px 16px;
+        border-radius: 18px 18px 18px 4px;
+        margin: 8px auto 8px 0;
+        max-width: 70%;
+        text-align: left;
+        word-break: break-word;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        line-height: 1.5;
+        white-space: pre-wrap;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     }
-    .status-error {
-        background-color: #f44336;
-        color: white;
-    }
-    .orchestration-info {
-        background-color: #f5f5f5;
+    .data-section {
+        background-color: #e8f5e8;
         padding: 1rem;
         border-radius: 0.5rem;
         margin: 1rem 0;
-        color: #000000;
     }
-    .stChatMessage {
-        color: #000000 !important;
-    }
-    .stChatMessage p {
-        color: #000000 !important;
-    }
-    .stChatMessage strong {
-        color: #000000 !important;
+    .insights-section {
+        background-color: #fff3e0;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin: 1rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
-class HirschbachChatInterface:
-    """Streamlit interface for Hirschbach AI Risk Intelligence Platform"""
-    
-    def __init__(self):
-        self.graph = None
-        self.initialize_session_state()
-    
-    def get_graph(self):
-        """Lazy load the graph to avoid import errors during app startup"""
-        if self.graph is None:
-            with st.spinner("Initializing AI system..."):
-                self.graph = load_graph()
-                if self.graph is None:
-                    st.stop()
-        return self.graph
-    
-    def initialize_session_state(self):
-        """Initialize Streamlit session state"""
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
-        if "state" not in st.session_state:
-            st.session_state.state = self.create_initial_state()
-        if "orchestration_history" not in st.session_state:
-            st.session_state.orchestration_history = []
-    
-    def create_initial_state(self) -> RCMState:
-        """Create initial state for the RCM system"""
-        return RCMState(
-            messages=[],
-            orchestration={},
-            main_task_queue=[],
-            nl_to_sql_queue=[],
-            nl_to_sql_state={},
-            completed_tasks=[],
-            snowflake_results={},
-            redshift_results={},
-            error_message="",
-            aggregated_data=[],
-            task_results={},
-            insights={},
-            final_response="",
-            workflow_status="inactive"
-        )
-    
-    def display_header(self):
-        """Display the main header"""
-        st.markdown('<div class="main-header">🚛 Hirschbach AI Risk Intelligence MVP</div>', unsafe_allow_html=True)
-        
-        # Status indicator
-        status = st.session_state.state.get("workflow_status", "inactive")
-        status_class = f"status-{status}" if status in ["active", "complete", "error"] else "status-inactive"
-        status_text = status.upper() if status != "inactive" else "READY"
-        
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.markdown(f'<div class="status-indicator {status_class}">Status: {status_text}</div>', 
-                       unsafe_allow_html=True)
-    
-    def display_sidebar(self):
-        """Display sidebar with system information"""
-        with st.sidebar:
-            st.header("🔧 System Information")
-            
-            # Environment status
-            st.subheader("Environment Status")
-            azure_openai_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
-            azure_openai_key = os.getenv("AZURE_OPENAI_API_KEY")
-            azure_search_endpoint = os.getenv("AZURE_SEARCH_SERVICE_ENDPOINT")
-            azure_search_key = os.getenv("AZURE_SEARCH_API_KEY")
-            
-            st.write(f"Azure OpenAI: {'✅ Connected' if azure_openai_endpoint and azure_openai_key else '❌ Not configured'}")
-            st.write(f"Azure AI Search: {'✅ Connected' if azure_search_endpoint and azure_search_key else '❌ Not configured'}")
-            
-            # Current state info
-            st.subheader("Graph State")
-            state = st.session_state.state
-            
-            if state.get("orchestration"):
-                orchestration = state["orchestration"]
-                st.write(f"**Tasks:** {len(orchestration.get('tasks', []))}")
-                st.write(f"**Routed to:** {orchestration.get('routed_to', 'N/A')}")
-                st.write(f"**Status:** {state.get('workflow_status', 'N/A')}")
-            
-            # Show queue status
-            st.subheader("Queue Status")
-            st.write(f"**NL-to-SQL:** {len(state.get('nl_to_sql_queue', []))}")
-            st.write(f"**Risk Analyzer:** {len(state.get('risk_analyzer_queue', []))}")
-            st.write(f"**Compliance Monitor:** {len(state.get('compliance_monitor_queue', []))}")
-            st.write(f"**Intervention Engine:** {len(state.get('intervention_engine_queue', []))}")
-            
-            # Clear conversation button
-            if st.button("🗑️ Clear Conversation", type="secondary"):
-                st.session_state.messages = []
-                st.session_state.state = self.create_initial_state()
-                st.session_state.orchestration_history = []
-                st.rerun()
-    
-    def display_orchestration_info(self):
-        """Display orchestration information if available"""
-        state = st.session_state.state
-        
-        if state.get("orchestration"):
-            orchestration = state["orchestration"]
-            
-            with st.expander("📋 Orchestration Details", expanded=False):
-                st.markdown(f"""
-                <div class="orchestration-info">
-                    <strong>Original Input:</strong> {orchestration.get('original_input', 'N/A')}<br>
-                    <strong>Routed to:</strong> {orchestration.get('routed_to', 'N/A')}<br>
-                    <strong>Task Count:</strong> {len(orchestration.get('tasks', []))}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Display tasks
-                if orchestration.get('tasks'):
-                    st.subheader("Tasks")
-                    for i, task in enumerate(orchestration['tasks'], 1):
-                        st.write(f"{i}. {task.get('description', 'N/A')}")
-    
-    def display_azure_data_and_insights(self):
-        """Display Azure data and insights if available"""
-        state = st.session_state.state
-        
-        # Display Azure data
-        if state.get("azure_data") and state.get("azure_retrieval_completed"):
-            azure_data = state["azure_data"]
-            
-            with st.expander("📊 Azure Data Results", expanded=True):
-                if azure_data.get("success"):
-                    st.success(f"✅ Successfully retrieved {azure_data.get('rows_returned', 0)} rows in {azure_data.get('execution_time', '0.0s')}")
-                    
-                    # Display data preview
-                    if azure_data.get("data"):
-                        st.subheader("Data Preview")
-                        # Limit data display for performance
-                        display_data = azure_data["data"][:100]  # Show max 100 rows
-                        data_df = st.dataframe(display_data, width='stretch')
-                        if len(azure_data["data"]) > 100:
-                            st.info(f"Showing first 100 rows of {len(azure_data['data'])} total rows")
-                        
-                        # Display query executed
-                        st.subheader("Query Executed")
-                        st.code(azure_data.get("query_executed", "N/A"), language="sql")
-                else:
-                    st.error(f"❌ Data retrieval failed: {azure_data.get('error', 'Unknown error')}")
-        
-        # Display insights
-        if state.get("insights_generated") and state.get("generated_insights"):
-            insights = state["generated_insights"]
-            
-            with st.expander("🔍 Generated Insights", expanded=True):
-                st.markdown(f"**Data Summary:** {insights.get('data_summary', 'N/A')}")
-                
-                # Key findings
-                if insights.get("key_findings"):
-                    st.subheader("Key Findings")
-                    for finding in insights["key_findings"]:
-                        st.markdown(f"• {finding}")
-                
-                # Recommendations
-                if insights.get("recommendations"):
-                    st.subheader("Recommendations")
-                    for rec in insights["recommendations"]:
-                        st.markdown(f"💡 {rec}")
-                
-                # Data preview in insights
-                if insights.get("data_preview"):
-                    st.subheader("Data Sample")
-                    st.dataframe(insights["data_preview"], width='stretch')
-    
-    def display_suggested_queries(self):
-        """Display suggested queries for risk intelligence"""
-        st.markdown("### Try These Out")
-        
-        # Risk intelligence queries based on the reference images
-        suggested_queries = [
-            "Which drivers present the highest risk of a preventable accident based on recent crash history and come away from home?",
-            "Where are preventable crash claims exceeding our safety targets, and what's driving the increase?",
-            "Which regions and/or business segments are most exposed to future accidents in the next quarter?",
-            "Who are the top drivers we should proactively reach out to this week based on elevated accident risk?",
-            "How do accident trends compare between company drivers and non-company drivers over the last 6 months?",
-            "Which drivers have had the highest concentration of high-risk drivers under their supervision?"
-        ]
-        
-        # Create columns for the queries
-        cols = st.columns(2)
-        for i, query in enumerate(suggested_queries):
-            with cols[i % 2]:
-                if st.button(f"🔍 {query[:60]}...", key=f"suggested_{i}", help=query):
-                    # Process the suggested query
-                    self.process_user_input(query)
-                    st.rerun()
-    
-    def display_messages(self):
-        """Display chat messages"""
-        for message in st.session_state.messages:
-            if isinstance(message, HumanMessage):
-                st.markdown(f"""
-                <div class="chat-message user-message">
-                    <strong>You:</strong> {message.content}
-                </div>
-                """, unsafe_allow_html=True)
-            elif isinstance(message, AIMessage):
-                st.markdown(f"""
-                <div class="chat-message assistant-message">
-                    <strong>Assistant:</strong> {message.content}
-                </div>
-                """, unsafe_allow_html=True)
-    
-    def process_user_input(self, user_input: str):
-        """Process user input through the graph"""
-        try:
-            # Add user message to session state
-            user_message = HumanMessage(content=user_input)
-            st.session_state.messages.append(user_message)
-            
-            # Process through the graph
-            with st.spinner("Processing your risk intelligence request..."):
-                graph = self.get_graph()
-                result = graph.process_message(user_input, thread_id="main")
-                
-                # Update session state with graph result
-                st.session_state.state = result
-                
-                # Add AI response if available
-                if result.get("final_response"):
-                    ai_message = AIMessage(content=result["final_response"])
-                    st.session_state.messages.append(ai_message)
-                
-                # Store orchestration info
-                if result.get("orchestration"):
-                    st.session_state.orchestration_history.append(result["orchestration"])
-            
-        except Exception as e:
-            st.error(f"Error processing request: {str(e)}")
-            error_message = AIMessage(content=f"I encountered an error: {str(e)}")
-            st.session_state.messages.append(error_message)
-    
-    def run(self):
-        """Main run method for the Streamlit app"""
-        self.display_header()
-        self.display_sidebar()
-        
-        # Main chat interface
-        st.subheader("💬 Ask Anything. Get Insights")
-        st.markdown("*Natural language queries powered by AI. Simply ask a question and get actionable insights instantly.*")
-        
-        # Show loading state if graph not initialized
-        if self.graph is None:
-            st.info("🚀 Click 'Send' to initialize the AI system and start your first query!")
-        
-        # Display orchestration info
-        self.display_orchestration_info()
-        
-        # Display Azure data and insights
-        self.display_azure_data_and_insights()
-        
-        # Suggested queries section
-        self.display_suggested_queries()
-        
-        # Display messages
-        self.display_messages()
-        
-        # Chat input
-        user_input = st.chat_input("Tell me about your fleet risk, driver performance or safety metrics...")
-        
-        if user_input:
-            self.process_user_input(user_input)
-            st.rerun()
-        
-        # Instructions
-        with st.expander("ℹ️ How to use this Risk Intelligence Platform", expanded=False):
-            st.markdown("""
-            **This Hirschbach AI Risk Intelligence Platform transforms fleet risk from reactive reports to predictive insights:**
-            
-            🎯 **Instant Insights:**
-            - Ask in plain English, get immediate answers - no delays, smarter decisions
-            - Natural language queries powered by AI for actionable insights instantly
-            
-            🔮 **Predictive & Proactive:**
-            - Spot high-risk drivers early and prevent avoidable crashes
-            - Identify regions and business segments most exposed to future accidents
-            - Anticipate issues before they become problems
-            
-            🤖 **Automated Guidance:**
-            - Delivers tailored coaching and recommendations for each driver
-            - Ranks interventions by ROI, impact & cost
-            - Builds a confident, data-driven roadmap for safety improvements
-            
-            **Key Capabilities:**
-            - Driver risk prioritization and root cause analysis
-            - Predictive accident risk assessment
-            - Safety target monitoring and trend analysis
-            - Proactive intervention recommendations
-            - Fleet-wide risk intelligence and reporting
-            """)
+
+def initialize_session_state():
+    """Initialize Streamlit session state"""
+    if 'messages' not in st.session_state:
+        st.session_state.messages = []
+
 
 def main():
-    """Main function to run the Streamlit app"""
-    # Check environment variables
-    if not os.getenv("AZURE_OPENAI_ENDPOINT") or not os.getenv("AZURE_OPENAI_API_KEY"):
-        st.error("❌ Azure OpenAI configuration not found. Please set AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY in your .env file.")
-        st.stop()
+    """Main Streamlit app using LangGraph's built-in orchestration"""
+    initialize_session_state()
     
-    if not os.getenv("AZURE_SEARCH_SERVICE_ENDPOINT") or not os.getenv("AZURE_SEARCH_API_KEY"):
-        st.warning("⚠️ Azure AI Search configuration not found. RAG features may not work properly.")
+    # Header
+    st.markdown('<h1 class="main-header">🚛 Hirschbach AI Risk Intelligence Platform</h1>', unsafe_allow_html=True)
     
-    # Create and run the interface
-    interface = HirschbachChatInterface()
-    interface.run()
+    # Suggested queries - Fixed at top
+    st.subheader("💡 Try These Sample Queries")
+    col1, col2 = st.columns(2)
+    
+    sample_queries = [
+        "Show me accident trends by state for the last 6 months",
+        "Which drivers have the highest risk of preventable accidents?",
+        "What are the most common types of cargo claims?",
+        "Show me claims data filtered by status and coverage type",
+        "Which regions have the highest claim frequency?",
+        "Analyze accident patterns by driver experience level"
+    ]
+    
+    for i, query in enumerate(sample_queries):
+        with col1 if i % 2 == 0 else col2:
+            if st.button(f"🔍 {query[:40]}...", key=f"sample_{i}", help=query):
+                # Add the query to chat input
+                st.session_state.suggested_query = query
+                st.rerun()
+    
+    # Instructions - Fixed at top
+    with st.expander("ℹ️ How to use this platform", expanded=False):
+        st.markdown("""
+        **Hirschbach AI Risk Intelligence Platform using LangGraph orchestration:**
+        
+        1. **Ask Questions**: Type your questions about risk intelligence in natural language
+        2. **AI Processing**: LangGraph automatically routes through:
+           - **Orchestrator**: Determines if you need existing KPI or new SQL generation
+           - **KPI Editor**: Modifies existing KPIs to match your request
+           - **SQL Generation**: Creates new SQL queries from scratch
+           - **Azure Retrieval**: Executes SQL and retrieves data from your database
+           - **Insight Generation**: Analyzes data and provides recommendations
+        3. **Get Results**: See data tables, SQL queries, and AI-generated insights
+        4. **Full Workflow**: Input → Orchestrator → (KPI Editor OR SQL Generation) → Azure Retrieval → Insight Generation → Output
+        
+        **Features:**
+        - ✅ **Smart Routing**: Automatically chooses between KPI editing and SQL generation
+        - ✅ **Real-time Data**: Direct connection to your Azure SQL database
+        - ✅ **AI Insights**: Automated analysis and recommendations
+        - ✅ **Query Transparency**: See exactly what SQL was executed
+        - ✅ **Performance Tracking**: Monitor execution times and row counts
+        
+        **This version uses LangGraph's built-in orchestration for optimal performance!**
+        """)
+    
+    # Sidebar
+    with st.sidebar:
+        st.header("🔧 System Status")
+        
+        # Check environment variables
+        env_vars = {
+            "Azure OpenAI": (os.getenv("AZURE_OPENAI_ENDPOINT"), os.getenv("AZURE_OPENAI_API_KEY")),
+            "Azure Search": (os.getenv("AZURE_SEARCH_SERVICE_ENDPOINT"), os.getenv("AZURE_SEARCH_API_KEY")),
+            "Azure SQL": (os.getenv("SQL_CONNECTION_STRING"), None)
+        }
+        
+        for service, (endpoint, key) in env_vars.items():
+            if service == "Azure SQL":
+                if endpoint:
+                    st.success(f"✅ {service} configured")
+                else:
+                    st.error(f"❌ {service} not found")
+            else:
+                if endpoint and key:
+                    st.success(f"✅ {service} configured")
+                else:
+                    st.warning(f"⚠️ {service} incomplete")
+        
+        # System status
+        st.success("✅ System ready")
+        st.info("🚀 Fast create-and-run approach")
+        
+        # Show current workflow status
+        if hasattr(st.session_state, 'last_result') and st.session_state.last_result:
+            result = st.session_state.last_result
+            st.subheader("📊 Last Execution")
+            
+            # Show which nodes were executed
+            if result.get("sql_generation_status"):
+                status = result.get("sql_generation_status")
+                color = "🟢" if status == "completed" else "🔴"
+                st.write(f"{color} SQL Generation: {status}")
+            
+            if result.get("kpi_editor_status"):
+                status = result.get("kpi_editor_status")
+                color = "🟢" if status == "completed" else "🔴"
+                st.write(f"{color} KPI Editor: {status}")
+            
+            if result.get("azure_retrieval_completed"):
+                st.write("🟢 Azure Retrieval: completed")
+            
+            if result.get("insights_generated"):
+                st.write("🟢 Insights: generated")
+        
+        # Clear conversation button
+        if st.button("🗑️ Clear Conversation"):
+            st.session_state.messages = []
+            if hasattr(st.session_state, 'last_result'):
+                del st.session_state.last_result
+            st.rerun()
+    
+    # Chat container
+    chat_container = st.container()
+    with chat_container:
+        st.markdown('<div class="chat-scroll">', unsafe_allow_html=True)
+        
+        # Display chat messages
+        for msg_idx, message in enumerate(st.session_state.messages):
+            if message["role"] == "user":
+                st.markdown(f'<div class="user-message">{message["content"]}</div>', unsafe_allow_html=True)
+            else:
+                # Display bot message
+                st.markdown(f'<div class="bot-message">{message["content"]}</div>', unsafe_allow_html=True)
+                
+                # Display data if available
+                if message.get("has_data") and message.get("data") is not None:
+                    st.markdown('<div class="data-section">', unsafe_allow_html=True)
+                    st.subheader("📊 Retrieved Data")
+                    
+                    
+                    # Display the data
+                    st.dataframe(message["data"], width='stretch')
+                    
+                    # Show row count
+                    row_count = len(message['data'])
+                    st.info(f"Total rows: {row_count:,}")
+                    
+                    # Show SQL query if available
+                    if message.get("sql_query"):
+                        with st.expander("🔍 SQL Query Executed", expanded=False):
+                            st.code(message["sql_query"], language="sql")
+                else:
+                    # Show SQL query even if no data
+                    if message.get("sql_query"):
+                        st.markdown('<div class="data-section">', unsafe_allow_html=True)
+                        st.subheader("🔍 Generated SQL Query")
+                        st.code(message["sql_query"], language="sql")
+                        st.info("ℹ️ This query was generated but not executed (no data returned)")
+                        st.markdown('</div>', unsafe_allow_html=True)
+                
+                # Display insights if available
+                if message.get("has_insights") and message.get("insights"):
+                    insights = message["insights"]
+                    
+                    # Key findings
+                    if insights.get("key_findings"):
+                        st.subheader("Key Findings")
+                        for finding in insights["key_findings"]:
+                            st.markdown(f"• {finding}")
+                    
+                    # Recommendations
+                    if insights.get("recommendations"):
+                        st.subheader("Recommendations")
+                        for rec in insights["recommendations"]:
+                            st.markdown(f"💡 {rec}")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Handle suggested query
+    if hasattr(st.session_state, 'suggested_query'):
+        user_input = st.session_state.suggested_query
+        del st.session_state.suggested_query
+    else:
+        user_input = st.chat_input("Ask about accident trends, driver risk, or safety insights...")
+    
+    if user_input:
+        # Add user message
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        
+        # Process through LangGraph - simple create-and-run
+        with st.spinner("Processing your request..."):
+            try:
+                # Create and run graph directly - no caching, no complexity
+                result = create_and_run_graph(user_input)
+                
+                # Store result for sidebar display
+                st.session_state.last_result = result
+                
+                # Extract response and data
+                final_response = result.get("final_response", "I've processed your request.")
+                azure_data = result.get("azure_data", {})
+                insights = result.get("generated_insights", {})
+                
+                # Prepare message content
+                message_content = final_response
+                
+                # Check if we have data
+                has_data = False
+                data_df = None
+                execution_details = None
+                sql_query = None
+                
+                if azure_data.get("success") and azure_data.get("data"):
+                    has_data = True
+                    data_df = pd.DataFrame(azure_data["data"])
+                    execution_details = {
+                        "rows_returned": azure_data.get('rows_returned', 0),
+                        "execution_time": azure_data.get('execution_time', '0.0s'),
+                        "success": azure_data.get('success', False)
+                    }
+                    sql_query = azure_data.get('query_executed', '')
+                elif azure_data.get("error"):
+                    message_content += f"\n\n**Data Error:** {azure_data.get('error')}"
+                    sql_query = azure_data.get('query_executed', '')
+                else:
+                    # Check if we have SQL query even without data
+                    sql_query = result.get("generated_sql", "")
+                    if not sql_query and result.get("top_kpi"):
+                        sql_query = result.get("top_kpi", {}).get("sql_query", "")
+                
+                # Check if we have insights
+                has_insights = bool(insights and insights.get("key_findings"))
+                
+                # Add AI response to chat
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": message_content,
+                    "has_data": has_data,
+                    "data": data_df,
+                    "execution_details": execution_details,
+                    "sql_query": sql_query,
+                    "has_insights": has_insights,
+                    "insights": insights
+                })
+                
+            except Exception as e:
+                error_message = f"I encountered an error: {str(e)}"
+                st.session_state.messages.append({
+                    "role": "assistant", 
+                    "content": error_message,
+                    "has_data": False,
+                    "has_insights": False
+                })
+        
+        st.rerun()
 
 if __name__ == "__main__":
     main()

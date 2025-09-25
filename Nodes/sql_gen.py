@@ -31,13 +31,25 @@ class SQLGenerationNode:
         """
         print("[SQL GENERATION] Processing SQL generation...")
         
-        # Extract user query from state (preferred) or fallback to last message
-        user_query = state.get("user_query", "")
+        # Get user input from the latest message (same pattern as KPI editor)
+        messages = state.get("messages", [])
+        if not messages:
+            print("[SQL GENERATION] No messages found")
+            state["sql_generation_status"] = "error"
+            state["sql_generation_error"] = "No messages found in state"
+            return state
+        
+        # Get user input from the first HumanMessage (proper LangGraph pattern)
+        user_query = ""
+        for msg in messages:
+            if hasattr(msg, 'content') and hasattr(msg, '__class__'):
+                if 'Human' in str(msg.__class__):
+                    user_query = msg.content
+                    break
+        
         if not user_query:
-            # Fallback to last message if user_query not in state
-            messages = state.get("messages", [])
-            if messages:
-                user_query = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
+            # Fallback: use the last message
+            user_query = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
         
         if not user_query:
             print("❌ [SQL GENERATION] No user query found in state")
@@ -84,6 +96,10 @@ class SQLGenerationNode:
             }
             
             print("✅ [SQL GENERATION] SQL generation completed successfully")
+            print(f"🔍 [SQL GENERATION] Generated SQL: {final_sql}")
+            print(f"🔍 [SQL GENERATION] Setting sql_validated = True")
+            print(f"🔍 [SQL GENERATION] State keys after update: {list(state.keys())}")
+            print(f"🔍 [SQL GENERATION] sql_validated value: {state.get('sql_validated')}")
             return state
             
         except Exception as e:
@@ -121,6 +137,14 @@ class SQLGenerationNode:
         
         Available columns from metadata retrieval:
         {chr(10).join(column_details)}
+        
+        IMPORTANT: Focus on columns that directly match the user's intent. Look for:
+        - Columns that contain the exact keywords from the user's request
+        - Columns with descriptions that semantically match what the user is asking for
+        - Filter columns that would be needed to answer the specific question
+        
+        For example, if the user asks about "preventable claims", look for columns with "preventable" in the name or description.
+        If the user asks about "current month", look for date columns.
         
         Based on the query request and column descriptions, select which columns are needed for this SQL query.
         
@@ -185,6 +209,12 @@ class SQLGenerationNode:
         Available columns with values:
         {entity_text}
         
+        IMPORTANT: Map the user's intent to the most appropriate values according to the available values and the input prompt:
+        - For "preventable claims" → use "P" (Preventable) from Preventable Flag
+        - For "non-preventable claims" → use "N" (Non-preventable) from Preventable Flag
+        - For "current month" → use appropriate date filtering
+        - Match the user's specific request to the exact values that would filter the data correctly
+        
         Map user intent to exact values. Format: Column1: value1, Column2: value2
         If no specific values needed, return: none
         """
@@ -246,8 +276,17 @@ class SQLGenerationNode:
         
         {values_text}
         
-        Use AWS SQL syntax: wrap column names with spaces in square brackets [Column Name]
+        Use SQL Server syntax: wrap column names with spaces in square brackets [Column Name]
         Use table name: PRD.CLAIMS_SUMMARY
+        For date filtering, use SQL Server functions like DATEPART, YEAR, MONTH instead of DATE_TRUNC
+
+        When deciding on which date column to use, match the date column description with the user request and then see which date column is most likely to be the one the user is asking for.
+        
+        IMPORTANT: Filter out null and empty values for better data quality where necessary:
+        - Use WHERE [Column] IS NOT NULL AND TRIM([Column]) <> '' for string columns
+        - Use WHERE [Column] IS NOT NULL for numeric/date columns
+        - This ensures accurate counts and prevents null values from skewing results when needed.
+        
         Return only the SQL query.
         """
         

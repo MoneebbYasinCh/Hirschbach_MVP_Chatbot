@@ -69,8 +69,9 @@ class LLMCheckerNode:
         Can this KPI completely answer the user's request?
 
         - If the KPI can answer the request exactly as-is, without any modifications: return "perfect_match"
-        - If the KPI is relevant but needs minor modifications (filters, grouping, etc.): return "needs_minor_edit"  
-        - If the KPI is completely unrelated to the request: return "not_relevant"
+        - If the KPI is relevant but needs ONLY minor modifications (adding a filter, changing date range): return "needs_minor_edit"  
+        - If the KPI needs major changes (different grouping, different aggregation, different columns): return "not_relevant"
+        - If the KPI answers a completely different question: return "not_relevant"
 
         Return only one word: perfect_match, needs_minor_edit, or not_relevant
 
@@ -96,6 +97,12 @@ class LLMCheckerNode:
         group by [Accident or Incident Code]"
         and the user request is: "Can you please provide me the number of preventable claims for the current month?"
         then the response should be "not_relevant"
+        
+        if the KPI is: "Total Open Claims this Week"
+        and the KPI description is: "Provides the total number of new open claims reported in the current calendar week"
+        and the KPI SQL is: "SELECT COUNT(DISTINCT [Claim Number]) AS [Claims Count] FROM PRD.CLAIMS_SUMMARY cs WHERE [Occurrence Date] >= DATEADD(WEEK, DATEDIFF(WEEK, 0, GETUTCDATE()), 0)"
+        and the user request is: "What is the customer code for which maximum number of claims are present?"
+        then the response should be "not_relevant" (because it needs different grouping and different time scope)
         """
         
         try:

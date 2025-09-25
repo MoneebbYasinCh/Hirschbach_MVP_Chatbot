@@ -38,6 +38,21 @@ class AzureRetrievalNode:
         edited_kpi = state.get("edited_kpi", {})
         top_kpi = state.get("top_kpi", {})
         
+        # Force check for sql_generation_status as alternative indicator
+        sql_generation_status = state.get("sql_generation_status", "")
+        if sql_generation_status == "completed" and generated_sql:
+            sql_validated = True
+            print(f"[AZURE RETRIEVAL] Override: Setting sql_validated = True based on sql_generation_status")
+        
+        # Debug output to see what we're working with
+        print(f"[AZURE RETRIEVAL] Debug - sql_validated: {sql_validated}")
+        print(f"[AZURE RETRIEVAL] Debug - generated_sql: {generated_sql[:100] if generated_sql else 'None'}")
+        print(f"[AZURE RETRIEVAL] Debug - top_kpi sql: {top_kpi.get('sql_query', 'None')[:100] if top_kpi.get('sql_query') else 'None'}")
+        print(f"[AZURE RETRIEVAL] Debug - State keys: {list(state.keys())}")
+        print(f"[AZURE RETRIEVAL] Debug - sql_generation_status: {state.get('sql_generation_status', 'Not set')}")
+        print(f"[AZURE RETRIEVAL] Debug - Raw sql_validated from state: {state.get('sql_validated')}")
+        print(f"[AZURE RETRIEVAL] Debug - Raw generated_sql from state: {state.get('generated_sql', '')[:100] if state.get('generated_sql') else 'None'}")
+        
         # Determine SQL to execute - check multiple sources
         sql_to_execute = ""
         
