@@ -23,3 +23,19 @@ Claims by Status (Open/ Closed/ Reopened),"Claims_Summary: [Status Flag], [Claim
 Claims by Driver Leader by Date,"Claims_Summary: [Driver Manager Name], [Occurrence Date], [Claim Number]","SELECT [Driver Manager Name] AS [Driver Leader Name] , [Occurrence Date] AS Date, COUNT(DISTINCT [Claim Number]) FROM PRD.CLAIMS_SUMMARY cs 
  WHERE [Occurrence Date] IS NOT NULL
  GROUP BY [Driver Manager Name], [Occurrence Date]",Shows claims under the responsibility of each driver leader on specific dates. Useful for leadership-level accountability and identifying managers with higher-risk teams.
+Number of Claims by [Accident or Incident Code],Claims_Summary: [Accident or Incident Code],"SELECT 
+    [Accident or Incident Code], 
+    COUNT(*) AS [Number Of Claims] 
+FROM prd.CLAIMS_SUMMARY 
+GROUP BY [Accident or Incident Code];
+",Provides the total count of claims for each unique accident or incident category. It groups the records by [Accident or Incident Code] and counts the total number of rows within each group. The result highlights how many claims are associated with each type of accident/incident
+Top Locations by Claim Frequency & Cost,"Claims_Summary: [Claim City/State], [Gross Reserve]","    SELECT
+    [Claim City/State],
+    COUNT(*) AS [Total Claims],
+    SUM([Gross Reserve]) AS [Total Cost],
+    AVG([Gross Reserve]) AS [Average Cost]
+FROM PRD.CLAIMS_SUMMARY
+WHERE [Claim City] IS NOT NULL AND [Claim State] IS NOT NULL
+GROUP BY [Claim City/State]
+ORDER BY [Total Cost] DESC;","Provides a location-based analysis of claims at the city/state level. This query calculates the total number of claims, the sum of claim costs, and the average cost per claim for each city/state combination. Results are sorted by total cost, highlighting cities or states with the greatest financial exposure and allowing risk managers to focus on high-impact geographies."
+Gross Reserve Above/Below 25K,"Claims_Summary: [Claim Number],[Gross Reserve]","Select [Claim Number], CASE WHEN [Gross Reserve]>=25000 THEN 'Above' ELSE 'Below' END AS [Reserve Category] from PRD.CLAIMS_SUMMARY","Categorizes each claim based on its gross reserve amount. Claims with a gross reserve of $25,000 or more are classified as 'Above', while those below $25,000 are classified as 'Below'. This metric provides a simple way to segment claims into high-reserve versus low-reserve groups, helping analysts quickly identify potential high-cost exposures and focus on claims that may carry higher financial risk."
