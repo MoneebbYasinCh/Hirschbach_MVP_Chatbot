@@ -90,56 +90,40 @@ class EndNode:
     
     def _clear_processing_state(self, state: HirschbachGraphState) -> None:
         """
-        Clear processing state while preserving essential data for UI display
-        
-        Args:
-            state: Current state to clean
+        Clear processing artifacts while preserving conversation context
+        LangGraph handles conversation persistence automatically
         """
-        # Fields to preserve for UI display
+        # PRESERVE conversation context (LangGraph manages these)
         preserve_fields = {
-            "messages",           # Chat history
-            "final_response",     # Final response for UI
-            "azure_data",         # Data results for UI tables
-            "generated_insights", # Insights for UI display
-            "workflow_status"     # Completion status
+            "messages",           # Full conversation history (managed by LangGraph)
+            "user_query",         # Current user query
+            "final_response",     # Last response
+            "workflow_status"     # Current status
         }
         
-        # Fields to clear (processing state)
+        # Clear only processing artifacts (not conversation context)
         clear_fields = [
-            # Query processing
-            "user_query", "task", "orchestrator_decision",
+            # Previous query results
+            "azure_data", "generated_insights", "top_kpi",
+            "kpi_rag_results", "metadata_rag_results",
             
-            # KPI processing
-            "kpi_retrieval_completed", "top_kpi", "kpi_rag_results",
-            "kpi_editor_status", "kpi_editor_result", "kpi_editor_error",
-            "edited_kpi", "kpi_validated",
-            
-            # Metadata processing
-            "metadata_retrieval_completed", "metadata_rag_results",
-            
-            # LLM checker
-            "llm_check_result", "next_node",
-            
-            # SQL generation
-            "sql_generation_status", "sql_generation_result", "sql_generation_error",
-            "generated_sql", "sql_validated",
-            
-            # Azure retrieval processing flags
-            "azure_retrieval_completed", "insights_triggered", "kpi_processed",
-            
-            # Insight generation flags
+            # Processing flags
+            "kpi_retrieval_completed", "metadata_retrieval_completed",
+            "sql_generation_status", "azure_retrieval_completed", 
             "insights_generated", "kpi_insights_generated",
             
-            # Error handling
-            "error_message", "aggregated_data"
+            # Temporary data
+            "aggregated_data", "error_message",
+            "orchestration", "main_task_queue", "nl_to_sql_queue",
+            "completed_tasks", "snowflake_results", "redshift_results"
         ]
         
         # Clear processing fields
         for field in clear_fields:
             if field in state:
                 del state[field]
-                
-        print(f"[END NODE] Cleared {len(clear_fields)} processing fields, preserved {len(preserve_fields)} UI fields")
+        
+        print(f"[END NODE] Cleared processing artifacts, preserved conversation context")
     
     def _generate_risk_summary(self, aggregated_data: List[Dict[str, Any]]) -> str:
         """
@@ -293,8 +277,8 @@ def create_main_graph():
     workflow.add_edge("insight_generation", "end")
     workflow.add_edge("end", END)
     
-    # Compile the graph
-    memory = MemorySaver()
+    # Compile the graph with persistence
+    memory = MemorySaver()  # This enables conversation persistence
     compiled_graph = workflow.compile(checkpointer=memory)
     return compiled_graph
 

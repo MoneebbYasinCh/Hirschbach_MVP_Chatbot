@@ -10,21 +10,7 @@ class HirschbachGraphState(TypedDict):
     # Main orchestration
     orchestration: Dict[str, Any]
     
-    # Main task queue from orchestrator
-    main_task_queue: List[Dict[str, Any]]
-    
-    # Subgraph-specific queues
-    nl_to_sql_queue: List[Dict[str, Any]]
-    
-    # Subgraph internal states
-    nl_to_sql_state: Dict[str, Any]  # Internal state for NL-to-SQL subgraph
-    
-    # Completed tasks
-    completed_tasks: List[Dict[str, Any]]
-    
     # Database results
-    snowflake_results: Dict[str, Any]
-    redshift_results: Dict[str, Any]  # Redshift query results
     azure_data: Dict[str, Any]  # Azure SQL Database results
     
     # RAG results
@@ -50,10 +36,6 @@ class HirschbachGraphState(TypedDict):
     
     # Multi-task data aggregation
     aggregated_data: List[Dict[str, Any]]  # Store data from multiple tasks
-    task_results: Dict[str, Any]  # Store results from each completed task
-    
-    # Insights
-    insights: Dict[str, Any]
     
     # Final response
     final_response: str

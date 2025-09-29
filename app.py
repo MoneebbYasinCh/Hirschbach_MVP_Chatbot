@@ -18,19 +18,30 @@ logging.getLogger("azure").setLevel(logging.WARNING)
 logging.getLogger("azure.core").setLevel(logging.WARNING)
 logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
 
-# Simple create-and-run approach - no caching, no complexity
-def create_and_run_graph(user_input):
-    """Create graph and run it directly - fast and simple"""
-    from Graph_Flow.main_graph import create_main_graph
+def initialize_session_state():
+    """Initialize Streamlit session state with persistent graph"""
+    if 'messages' not in st.session_state:
+        st.session_state.messages = []
+    if 'graph' not in st.session_state:
+        from Graph_Flow.main_graph import create_main_graph
+        st.session_state.graph = create_main_graph()
+    if 'thread_id' not in st.session_state:
+        # Create unique thread_id for this session
+        import uuid
+        st.session_state.thread_id = f"user_{uuid.uuid4().hex[:8]}"
+
+def process_with_persistence(user_input):
+    """Process with LangGraph's native persistence"""
+    graph = st.session_state.graph  # REUSE SAME GRAPH
+    thread_id = st.session_state.thread_id
     
-    # Create graph fresh each time
-    graph = create_main_graph()
+    # Use consistent thread_id for state persistence
+    config = {"configurable": {"thread_id": thread_id}}
     
-    # Run it immediately
-    config = {"configurable": {"thread_id": "user_session"}}
+    # LangGraph handles all state management automatically
     inputs = {
         "messages": [HumanMessage(content=user_input)],
-        "user_query": user_input  # Store the original user query
+        "user_query": user_input
     }
     
     return graph.invoke(inputs, config)
@@ -100,10 +111,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-def initialize_session_state():
-    """Initialize Streamlit session state"""
-    if 'messages' not in st.session_state:
-        st.session_state.messages = []
+# initialize_session_state is now defined above
 
 
 def main():
@@ -181,9 +189,13 @@ def main():
                 else:
                     st.warning(f"⚠️ {service} incomplete")
         
+        # Show current thread info
+        if hasattr(st.session_state, 'thread_id'):
+            st.info(f"🧵 Thread ID: {st.session_state.thread_id[:8]}...")
+        
         # System status
         st.success("✅ System ready")
-        st.info("🚀 Fast create-and-run approach")
+        st.info("🚀 Persistent conversation enabled")
         
         # Show current workflow status
         if hasattr(st.session_state, 'last_result') and st.session_state.last_result:
@@ -207,8 +219,11 @@ def main():
             if result.get("insights_generated"):
                 st.write("🟢 Insights: generated")
         
-        # Clear conversation button
+        # Clear conversation button (now clears thread)
         if st.button("🗑️ Clear Conversation"):
+            # Create new thread_id to start fresh conversation
+            import uuid
+            st.session_state.thread_id = f"user_{uuid.uuid4().hex[:8]}"
             st.session_state.messages = []
             if hasattr(st.session_state, 'last_result'):
                 del st.session_state.last_result
@@ -282,11 +297,11 @@ def main():
         # Add user message
         st.session_state.messages.append({"role": "user", "content": user_input})
         
-        # Process through LangGraph - simple create-and-run
+        # Process with persistence
         with st.spinner("Processing your request..."):
             try:
-                # Create and run graph directly - no caching, no complexity
-                result = create_and_run_graph(user_input)
+                # Use persistent graph with conversation history
+                result = process_with_persistence(user_input)
                 
                 # Store result for sidebar display
                 st.session_state.last_result = result
