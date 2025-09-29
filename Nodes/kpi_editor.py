@@ -404,6 +404,12 @@ class KPIEditorNode:
         3. Keep the original SELECT and FROM structure
         4. Only add the minimal changes needed to fulfill the user request
         
+        When deciding on which date column to use:
+        If in the user request, it says something related to "open claims", use the column "Opened Date" for date filtering.
+        If in the user request, it says something related to "closed claims", use the column "Close Date" for date filtering.
+        If in the user request, there isnt mention of open or closed claims, use the column "Occurrence Date" for date filtering.
+        If in the user request, the user mentions a specific date column name, use that column for date filtering by matching it with the column present in the available columns.
+
         CRITICAL SQL SERVER SYNTAX RULES:
         - ALL column names with spaces MUST be wrapped in square brackets: [Column Name]
         - Use proper SQL Server date functions: MONTH(), YEAR(), GETDATE()

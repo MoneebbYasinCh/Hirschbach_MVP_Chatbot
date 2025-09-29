@@ -8,11 +8,7 @@ Gross Reserve by Driver by Date,"Claims_Summary: [Driver Name], [Occurrence Date
  FROM PRD.CLAIMS_SUMMARY 
  WHERE [Occurrence Date] IS NOT NULL
  GROUP BY [Driver Name] , [Occurrence Date] ",Shows the financial exposure (reserve amounts set aside) by driver per day. Useful for assessing which drivers are linked to higher reserve values and for financial risk monitoring.
-Total Open Claims this Week,"Claim_Summary: [Claim Number], [Occurrence Date]","SELECT COUNT(DISTINCT [Claim Number]) AS [Claims Count]
-FROM PRD.CLAIMS_SUMMARY cs
-WHERE [Occurrence Date] >= DATEADD(WEEK, DATEDIFF(WEEK, 0, GETUTCDATE()), 0)  -- start of current week (Monday 00:00)
-  AND [Occurrence Date] < DATEADD(WEEK, DATEDIFF(WEEK, 0, GETUTCDATE()) + 1, 0) -- start of next week
-  AND [Status Flag] = 'O';",Provides the total number of new open claims reported in the current calendar week. Helps track weekly claim trends and measure ongoing exposure.
+Total Open Claims this Week,"Claim_Summary: [Claim Number], [Occurrence Date]","SELECT COUNT(*) AS [Number of Claims Opened This Week] FROM PRD.CLAIMS_SUMMARY WHERE [Status Flag] = 'O' AND DATEPART(WEEK, [Opened Date]) = DATEPART(WEEK, GETDATE()) AND DATEPART(YEAR, [Opened Date]) = DATEPART(YEAR, GETDATE())",Provides the total number of new open claims reported in the current calendar week. Helps track weekly claim trends and measure ongoing exposure.
 Claims by Adjuster,"Claims_Summary: [Last Updated AdjusterName], [Claim Number]","SELECT [Last Updated AdjusterName] AS Adjuster , COUNT(DISTINCT [Claim Number]) AS [Claims Count] FROM PRD.CLAIMS_SUMMARY cs 
  GROUP BY [Last Updated AdjusterName] ",Shows how many claims are being managed by each adjuster. Useful for workload distribution and performance monitoring of adjusters.
 Claims by Status (Open/ Closed/ Reopened),"Claims_Summary: [Status Flag], [Claim Number]","SELECT CASE WHEN [Status Flag] = 'C' THEN 'Closed'

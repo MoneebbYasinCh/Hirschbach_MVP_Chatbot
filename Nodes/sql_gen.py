@@ -280,8 +280,12 @@ class SQLGenerationNode:
         Use table name: PRD.CLAIMS_SUMMARY
         For date filtering, use SQL Server functions like DATEPART, YEAR, MONTH instead of DATE_TRUNC
 
-        When deciding on which date column to use, match the date column description with the user request and then see which date column is most likely to be the one the user is asking for.
-        
+        When deciding on which date column to use:
+        If in the user request, it says something related to "open claims", use the column "Opened Date" for date filtering.
+        If in the user request, it says something related to "closed claims", use the column "Close Date" for date filtering.
+        If in the user request, there isnt mention of open or closed claims, use the column "Occurrence Date" for date filtering.
+        If in the user request, the user mentions a specific date column name, use that column for date filtering by matching it with the column present in the available columns.
+
         IMPORTANT: Filter out null and empty values for better data quality where necessary:
         - Use WHERE [Column] IS NOT NULL AND TRIM([Column]) <> '' for string columns
         - Use WHERE [Column] IS NOT NULL for numeric/date columns
