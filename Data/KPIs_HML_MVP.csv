@@ -20,9 +20,10 @@ Claims by Status (Open/ Closed/ Reopened),"Claims_Summary: [Status Flag], [Claim
  FROM PRD.CLAIMS_SUMMARY
  GROUP BY [Status Flag]
  ","Provides a breakdown of claims by lifecycle stage. Useful for monitoring progress, backlog of open claims, and tracking reopened claims (quality/risk insight)."
-Claims by Driver Leader by Date,"Claims_Summary: [Driver Manager Name], [Occurrence Date], [Claim Number]","SELECT [Driver Manager Name] AS [Driver Leader Name] , [Occurrence Date] AS Date, COUNT(DISTINCT [Claim Number]) FROM PRD.CLAIMS_SUMMARY cs 
- WHERE [Occurrence Date] IS NOT NULL
- GROUP BY [Driver Manager Name], [Occurrence Date]",Shows claims under the responsibility of each driver leader on specific dates. Useful for leadership-level accountability and identifying managers with higher-risk teams.
+Claims by Driver Leader by Date,"Claims_Summary: [Driver Manager Name], [Occurrence Date], [Claim Number]","SELECT [Driver Manager] as [Driver Manager Code],[Driver Manager Name] AS [Driver Leader Name] , [Occurrence Date] AS Date, COUNT(DISTINCT [Claim Number]) FROM PRD.CLAIMS_SUMMARY cs 
+ WHERE [Occurrence Date] IS NOT NULL and [Driver Manager] IS NOT NULL
+ GROUP BY [Driver Manager Name], [Occurrence Date],[Driver Manager]
+ order by cs.[Occurrence Date] DESC",Shows claims under the responsibility of each driver leader on specific dates. Useful for leadership-level accountability and identifying managers with higher-risk teams.
 Number of Claims by [Accident or Incident Code],Claims_Summary: [Accident or Incident Code],"SELECT 
     [Accident or Incident Code], 
     COUNT(*) AS [Number Of Claims] 

@@ -36,7 +36,8 @@ class AzureRetrievalNode:
         kpi_validated = state.get("kpi_validated", False)
         generated_sql = state.get("generated_sql", "")
         edited_kpi = state.get("edited_kpi", {})
-        top_kpi = state.get("top_kpi", {})
+        # Guard against None stored in state["top_kpi"]
+        top_kpi = state.get("top_kpi") or {}
         
         # Force check for sql_generation_status as alternative indicator
         sql_generation_status = state.get("sql_generation_status", "")
@@ -47,7 +48,7 @@ class AzureRetrievalNode:
         # Debug output to see what we're working with
         print(f"[AZURE RETRIEVAL] Debug - sql_validated: {sql_validated}")
         print(f"[AZURE RETRIEVAL] Debug - generated_sql: {generated_sql[:100] if generated_sql else 'None'}")
-        print(f"[AZURE RETRIEVAL] Debug - top_kpi sql: {top_kpi.get('sql_query', 'None')[:100] if top_kpi.get('sql_query') else 'None'}")
+        print(f"[AZURE RETRIEVAL] Debug - top_kpi sql: {top_kpi.get('sql_query', 'None')[:100] if isinstance(top_kpi, dict) and top_kpi.get('sql_query') else 'None'}")
         print(f"[AZURE RETRIEVAL] Debug - State keys: {list(state.keys())}")
         print(f"[AZURE RETRIEVAL] Debug - sql_generation_status: {state.get('sql_generation_status', 'Not set')}")
         print(f"[AZURE RETRIEVAL] Debug - Raw sql_validated from state: {state.get('sql_validated')}")
@@ -62,7 +63,7 @@ class AzureRetrievalNode:
             print(f"[AZURE RETRIEVAL] Using validated generated SQL: {sql_to_execute[:100]}...")
         
         # Priority 2: Use KPI SQL directly (perfect match scenario)
-        elif top_kpi.get("sql_query"):
+        elif isinstance(top_kpi, dict) and top_kpi.get("sql_query"):
             sql_to_execute = top_kpi.get("sql_query")
             print(f"[AZURE RETRIEVAL] Using KPI SQL: {sql_to_execute[:100]}...")
         

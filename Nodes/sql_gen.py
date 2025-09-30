@@ -133,39 +133,52 @@ class SQLGenerationNode:
         
         # Smart selection prompt using column descriptions
         analysis_prompt = f"""
-        SQL Query Request: "{user_query}"
-        
-        Available columns from metadata retrieval:
+        TASK: Select the minimal set of columns needed to answer the user's request.
+
+        USER REQUEST:
+        "{user_query}"
+
+        AVAILABLE COLUMNS (name, type, description, relevance):
         {chr(10).join(column_details)}
-        
-        IMPORTANT: Focus on columns that directly match the user's intent. Look for:
-        - Columns that contain the exact keywords from the user's request
-        - Columns with descriptions that semantically match what the user is asking for
-        - Filter columns that would be needed to answer the specific question
-        
-        For example, if the user asks about "preventable claims", look for columns with "preventable" in the name or description.
-        If the user asks about "current month", look for date columns.
-        
-        Based on the query request and column descriptions, select which columns are needed for this SQL query.
-        
-        Available column names: {', '.join(available_columns)}
-        
-        Return only the exact column names from the list above, separated by commas. If no specific columns are needed for filtering, return "none".
+
+        SELECTION RULES (APPLY ALL):
+        - Choose only columns necessary for filtering, grouping, or producing the result.
+        - Prefer columns whose descriptions semantically match the request.
+        - Pairing rule: If a NAME-style column is selected, you MUST also select its corresponding CODE-style column for the same entity.
+          • Prefer CODE columns for filtering/grouping.
+          • Use NAME columns for display and NOT NULL checks.
+        - How to detect pairs (semantic): two columns clearly referring to the same entity where one is a human-readable label (often ends with "Name" or says "Full name") and the other is an identifier/code (mentions "code", "identifier", or is short alphanumeric).
+
+        AVAILABLE COLUMN NAMES:
+        {', '.join(available_columns)}
+
+        OUTPUT (CRITICAL):
+        - Return ONLY valid JSON with this exact shape and nothing else:
+          {{"needed_columns": ["Column A", "Column B", "..."]}}
+        - Every item MUST be taken from AVAILABLE COLUMN NAMES.
+        - If a NAME column appears, its CODE counterpart MUST also appear.
+        - Example:
+          {{"needed_columns": ["Entity Code", "Entity Name", "Occurrence Date"]}}
         """
         
         try:
             response = self.llm.invoke(analysis_prompt)
             analysis_result = response.content.strip()
             
-            if analysis_result.lower() != "none" and analysis_result:
-                # Parse the selected column names
-                selected_columns = [col.strip() for col in analysis_result.split(',') if col.strip()]
-                
-                # Only keep columns that exist in available_columns
-                for col in selected_columns:
-                    if col in available_columns and col not in needed_columns:
-                        needed_columns.append(col)
-                        print(f"🔧 [SQL_GEN] Selected column: {col}")
+            # Try JSON first
+            try:
+                import json
+                parsed = json.loads(analysis_result)
+                selected_columns = parsed.get("needed_columns", []) if isinstance(parsed, dict) else []
+            except Exception:
+                # Fallback to comma-separated parsing
+                selected_columns = [col.strip() for col in analysis_result.split(',') if col.strip() and analysis_result.lower() != "none"]
+
+            # Only keep columns that exist in available_columns
+            for col in selected_columns:
+                if col in available_columns and col not in needed_columns:
+                    needed_columns.append(col)
+                    print(f"🔧 [SQL_GEN] Selected column: {col}")
             
         except Exception as e:
             print(f"⚠️ [SQL_GEN] Error analyzing needed columns: {str(e)}")
@@ -185,7 +198,7 @@ class SQLGenerationNode:
         for column_name in needed_columns:
             try:
                 result = self.entity_tool.get_column_values(column_name)
-                if result.get("success", False):
+                if result and result.get("success", False):
                     values = result.get("values", [])
                     entity_data[column_name] = values
                     print(f"🔧 [SQL_GEN] Added entity mapping for {column_name}: {values}")
@@ -285,6 +298,14 @@ class SQLGenerationNode:
         If in the user request, it says something related to "closed claims", use the column "Close Date" for date filtering.
         If in the user request, there isnt mention of open or closed claims, use the column "Occurrence Date" for date filtering.
         If in the user request, the user mentions a specific date column name, use that column for date filtering by matching it with the column present in the available columns.
+
+        CRITICAL COLUMN PAIR RULE (apply strictly) (this is just one example):
+        - If both [Driver Manager] (code) and [Driver Manager Name] (name) exist:
+          1) You MUST use [Driver Manager] in WHERE and GROUP BY for all filtering/grouping.
+          2) You MUST also SELECT [Driver Manager Name] for readability.
+          3) If non-null name is requested, apply IS NOT NULL and TRIM([Driver Manager Name]) <> '' to the NAME column only.
+          4) NEVER filter by [Driver Manager Name]. Always filter by [Driver Manager].
+        The same should be done for other code and name pairs like the example given above.
 
         IMPORTANT: Filter out null and empty values for better data quality where necessary:
         - Use WHERE [Column] IS NOT NULL AND TRIM([Column]) <> '' for string columns

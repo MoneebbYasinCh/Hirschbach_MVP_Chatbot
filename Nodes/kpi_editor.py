@@ -170,6 +170,16 @@ class KPIEditorNode:
         2. Then, based on the user task, determine what ADDITIONAL columns are needed for filtering, grouping, or analyzing the data
         3. Only select columns that are NOT already in the SQL query but are needed for the user's request
         
+        IMPORTANT SELECTION RULES (APPLY ALL):
+        - If both a CODE column and a NAME column exist for the same entity, you MUST include BOTH in the needed columns.
+          Example known pair: Driver Manager (code) + Driver Manager Name (name)
+        - ALWAYS prefer the CODE column for filtering/grouping and is not null; the NAME column is for display and NOT NULL checks.
+
+        OUTPUT FORMAT (CRITICAL):
+        - Return ONLY a comma-separated list of column names from Available column names.
+        - If a pair exists, both names MUST appear in the output list.
+        - Example valid output: Driver Manager, Driver Manager Name, Occurrence Date
+        
         Available column names: {', '.join(available_columns)}
 
         examples:
@@ -246,7 +256,11 @@ class KPIEditorNode:
         - "high-value claims" → Actual Recovered Amount (numeric filter)
         - "critical claims only" → Is Critical Flag (conditional: 1)
         - "show claims by type" → none (generic grouping)
-        
+        CODE/NAME PAIRS RULE:
+        - If both a CODE and NAME column exist for the same entity, prefer the CODE column for filtering/grouping.
+        - Keep the NAME column for display and NOT NULL checks, but do not map name values when a code value exists.
+
+
         ANALYSIS FOR: "{task}"
         Look for ANY specific constraints, temporal references, exact values, or conditions mentioned.
         
@@ -300,6 +314,10 @@ class KPIEditorNode:
         2. Temporal logic: "this month" → "current_month"
         3. Numeric filters: "over $10k" → "amount > 10000"
         4. Conditional logic: "critical" → "is_critical = 1"
+        
+        CODE/NAME PAIRS MAPPING RULE:
+        - Prefer mapping values for CODE columns when a corresponding NAME column exists.
+        - Do not map NAME values if a CODE value is available; use NAME only for display/NOT NULL checks.
         
         Format: Column1: logic_type:value, Column2: logic_type:value
         
@@ -409,7 +427,12 @@ class KPIEditorNode:
         If in the user request, it says something related to "closed claims", use the column "Close Date" for date filtering.
         If in the user request, there isnt mention of open or closed claims, use the column "Occurrence Date" for date filtering.
         If in the user request, the user mentions a specific date column name, use that column for date filtering by matching it with the column present in the available columns.
-
+        
+        ENTITY PAIRS AND FILTERING RULES:
+        - If both a CODE column and a NAME column exist for the same entity (e.g., [Driver Manager] code, [Driver Manager Name] name), then:
+          1) Prefer using the CODE column in WHERE/GROUP BY for filtering/grouping.
+          2) SELECT both columns for readability (code + name).
+          3) Apply NOT NULL and TRIM checks to the NAME column if the request requires non-null names.
         CRITICAL SQL SERVER SYNTAX RULES:
         - ALL column names with spaces MUST be wrapped in square brackets: [Column Name]
         - Use proper SQL Server date functions: MONTH(), YEAR(), GETDATE()
@@ -433,7 +456,7 @@ class KPIEditorNode:
         for column_name in needed_columns:
             try:
                 result = self.entity_tool.get_column_values(column_name)
-                if result.get("success", False):
+                if result and result.get("success", False):
                     values = result.get("values", [])
                     entity_data.append(f"- {column_name}: {values}")
                     print(f"🔧 [KPI_EDITOR] Added entity mapping for {column_name}: {values}")
