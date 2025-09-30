@@ -38,6 +38,53 @@ class LLMCheckerNode:
                     task = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
             else:
                 task = state.get("task", "")
+
+        # Minimal smart scope check using dynamic metadata (no hardcoding)
+        try:
+            metadata_results = state.get("metadata_rag_results", []) or []
+            # Build a compact, LLM-friendly list of available columns
+            available_cols = []
+            for col in metadata_results[:30]:  # keep short
+                name = col.get("column_name", "").strip()
+                desc = col.get("description", "").strip()
+                if name:
+                    available_cols.append(f"- {name}: {desc}")
+
+            # Only run scope check if we have any metadata
+            if available_cols and task:
+                scope_prompt = f"""
+                You are validating whether a user's request can be answered strictly using the following available columns.
+                If the request requires data outside these columns (e.g., telematics/speeding events), classify it as OUT_OF_SCOPE.
+
+                USER REQUEST:
+                "{task}"
+
+                AVAILABLE COLUMNS (name: description):
+                {chr(10).join(available_cols)}
+
+                Respond with only one word: IN_SCOPE or OUT_OF_SCOPE.
+                """
+
+                scope_resp = self.llm.invoke(scope_prompt)
+                scope_text = str(getattr(scope_resp, "content", "")).strip().upper()
+
+                if "OUT_OF_SCOPE" in scope_text:
+                    state["llm_check_result"] = {
+                        "decision_type": "out_of_scope",
+                        "reasoning": "Request needs data not represented in available columns",
+                        "confidence": "HIGH"
+                    }
+                    state["final_response"] = (
+                        "I don't have access to that data. I can analyze claims in PRD.CLAIMS_SUMMARY "
+                        "using the columns available to me. If you want, I can answer related claims "
+                        "questions like counts, trends, types, locations, or dates."
+                    )
+                    state["workflow_status"] = "complete"
+                    state["next_node"] = "end"
+                    return state
+        except Exception:
+            # Fail open to existing behavior if scope check has any issue
+            pass
         
         # Get KPI results from the state
         top_kpi = state.get("top_kpi")

@@ -293,6 +293,21 @@ class MetadataRetrievalNode:
         
         print(f"📈 Retrieved {len(all_columns)} unique columns")
         
+        # Ensure Occurrence Date is always available (from actual metadata CSV)
+        occurrence_date_exists = any(col.get('column_name') == 'Occurrence Date' for col in all_columns)
+        if not occurrence_date_exists:
+            occurrence_date_entry = {
+                "id": "guaranteed_occurrence_date",
+                "column_name": "Occurrence Date",
+                "description": "Date when the accident or incident actually occurred. Primary field for time-based analysis.",
+                "data_type": "date",
+                "table_name": "PRD.CLAIMS_SUMMARY",
+                "primary_key": "",
+                "foreign_key": ""
+            }
+            all_columns.append(occurrence_date_entry)
+            print("🔧 [METADATA RETRIEVAL] Added guaranteed Occurrence Date entry")
+        
         return all_columns
     
     

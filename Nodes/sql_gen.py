@@ -311,6 +311,12 @@ class SQLGenerationNode:
         - Use WHERE [Column] IS NOT NULL AND TRIM([Column]) <> '' for string columns
         - Use WHERE [Column] IS NOT NULL for numeric/date columns
         - This ensures accurate counts and prevents null values from skewing results when needed.
+        - ALWAYS enforce NOT NULL conditions for EVERY column included in GROUP BY:
+          • For string GROUP BY columns: add WHERE TRIM([Column]) <> '' AND [Column] IS NOT NULL
+          • For numeric/date GROUP BY columns: add WHERE [Column] IS NOT NULL
+
+        DEFAULT SORTING (unless the user specifies otherwise):
+        - If the result contains a numeric aggregate or date, ORDER BY that column in DESC order.
         
         Return only the SQL query.
         """

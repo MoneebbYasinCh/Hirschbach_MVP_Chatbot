@@ -421,6 +421,9 @@ class KPIEditorNode:
         2. Add necessary WHERE clauses or other modifications
         3. Keep the original SELECT and FROM structure
         4. Only add the minimal changes needed to fulfill the user request
+        5. ALWAYS enforce NOT NULL conditions for EVERY column included in GROUP BY:
+           - For string GROUP BY columns: add WHERE TRIM([Column]) <> '' AND [Column] IS NOT NULL
+           - For numeric/date GROUP BY columns: add WHERE [Column] IS NOT NULL
         
         When deciding on which date column to use:
         If in the user request, it says something related to "open claims", use the column "Opened Date" for date filtering.
@@ -437,6 +440,9 @@ class KPIEditorNode:
         - ALL column names with spaces MUST be wrapped in square brackets: [Column Name]
         - Use proper SQL Server date functions: MONTH(), YEAR(), GETDATE()
         - For date filtering, use: WHERE ["any date column"] >= 'YYYY-MM-DD' AND ["any date column"] < 'YYYY-MM-DD'
+
+        DEFAULT SORTING (unless the user specifies otherwise):
+        - If the query has an aggregate metric or a date/time column in SELECT, ORDER BY that metric/date DESC.
         
         IMPORTANT SQL SERVER BIT COLUMN HANDLING:
         If any columns are of type 'bit' (e.g., [Preventable Flag], [Is Critical Flag], [Is Divided Highway Flag]), 

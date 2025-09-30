@@ -260,6 +260,10 @@ def create_main_graph():
     # LLM checker conditional routing
     def route_after_llm_checker(state):
         """Route based on LLM checker decision"""
+        # Respect explicit end routing first
+        next_node = state.get("next_node")
+        if next_node == "end":
+            return "end"
         llm_check_result = state.get("llm_check_result", {})
         decision_type = llm_check_result.get("decision_type", "not_relevant")
         
@@ -276,7 +280,8 @@ def create_main_graph():
         {
             "azure_retrieval": "azure_retrieval",
             "kpi_editor": "kpi_editor",
-            "sql_generation": "sql_generation"
+            "sql_generation": "sql_generation",
+            "end": "end"
         }
     )
     
