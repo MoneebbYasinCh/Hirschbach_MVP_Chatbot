@@ -133,11 +133,23 @@ class InsightGenerationNode:
         {json.dumps(data_sample, indent=2, default=str)}
         
         ANALYSIS REQUIREMENTS:
+        
         1. **Data Summary**: Describe what the data represents and key metrics
+        
         2. **Key Findings**: Identify 3-5 most important insights from the data
+        
         3. **Risk Assessment**: Highlight any risk factors or concerning patterns
+        
         4. **Business Recommendations**: Provide 3-4 actionable recommendations
+        
         5. **Trends & Patterns**: Note any significant patterns or anomalies
+
+        6. **SQL Query Reasoning**: Explain how and why this SQL query was constructed to answer the user's question
+           - What tables/columns were selected and why
+           - What filters/conditions were applied and their purpose
+           - What aggregations/groupings were used and why
+           - Whether the query is doing filtering vs aggregation vs both
+           - Any specific values that were mapped and why
         
         FOCUS AREAS:
         - Safety and risk management
@@ -149,6 +161,7 @@ class InsightGenerationNode:
         IMPORTANT: Return ONLY the JSON object below, no markdown formatting, no code blocks, no extra text:
         
         {{
+            "sql_query_reasoning": "Detailed explanation of how the SQL query was designed to answer the user's question, including column selection, filtering logic, aggregation strategy, and any value mappings applied",
             "data_summary": "Brief description of the data and key metrics",
             "key_findings": ["Finding 1", "Finding 2", "Finding 3", ...],
             "risk_assessment": "Assessment of risk factors and concerns",
@@ -180,6 +193,7 @@ class InsightGenerationNode:
                 
                 # Structure the final insights
                 insights = {
+                    "sql_query_reasoning": parsed_insights.get("sql_query_reasoning", "SQL query reasoning not provided"),
                     "data_summary": parsed_insights.get("data_summary", f"Retrieved {len(data)} rows in {azure_data.get('execution_time', '0.0s')}"),
                     "key_findings": parsed_insights.get("key_findings", []),
                     "risk_assessment": parsed_insights.get("risk_assessment", "No specific risks identified"),

@@ -309,11 +309,29 @@ class KPIEditorNode:
         Columns: {', '.join(needed_columns)}
         Available values: {entity_mapping_data}
         
+        CRITICAL: Distinguish between FILTERING queries vs AGGREGATION queries:
+        
+        === DO NOT MAP (Return "unclear" for these columns) ===
+        If the query asks for comparison/aggregation across ALL entities:
+        - Comparison keywords: "which", "what", "compare", "versus", "vs"
+        - Aggregation keywords: "distribution of", "breakdown by", "for each", "by", "across"
+        - Ranking keywords: "top", "lowest", "highest", "rank", "most", "least", "best", "worst"
+        - Grouping keywords: "all", "every", "each type of", "group by"
+        
+        Examples of when NOT to map:
+        - "Which customer has the lowest sum?" → Do NOT map Customer Code (need all customers)
+        - "What statuses have the most claims?" → Do NOT map Status Flag (need all statuses)
+        - "Compare claims by type" → Do NOT map claim type (need all types)
+        - "Distribution of claims across categories" → Do NOT map categories (need all)
+        
+        === DO MAP (Return logic_type:value) ===
+        Only map when user specifies EXACT entities/values to filter:
+        
         Map user intent to exact values and logic. Handle:
-        1. Categorical values: "closed" → "Closed"
-        2. Temporal logic: "this month" → "current_month"
-        3. Numeric filters: "over $10k" → "amount > 10000"
-        4. Conditional logic: "critical" → "is_critical = 1"
+        1. Categorical values: "closed" → categorical:Closed
+        2. Temporal logic: "this month" → temporal:current_month
+        3. Numeric filters: "over $10k" → numeric:>10000
+        4. Conditional logic: "critical" → conditional:1
         
         CODE/NAME PAIRS MAPPING RULE:
         - Prefer mapping values for CODE columns when a corresponding NAME column exists.
@@ -321,11 +339,19 @@ class KPIEditorNode:
         
         Format: Column1: logic_type:value, Column2: logic_type:value
         
-        Examples:
-        - Status Flag: categorical:Closed
-        - Occurrence Date: temporal:current_month
-        - Claim Amount: numeric:>10000
-        - Is Critical Flag: conditional:1
+        Examples of when TO map:
+        - Status Flag: categorical:Closed (if user asks for "closed claims")
+        - Preventable Flag: categorical:P (if user asks for "preventable claims")
+        - Occurrence Date: temporal:current_month (if user asks for "this month")
+        - Claim Amount: numeric:>10000 (if user asks for "over $10k")
+        - Is Critical Flag: conditional:1 (if user asks for "critical claims")
+        
+        Examples of when NOT to map (return "unclear"):
+        - Customer Code: unclear (if user asks "which customer has lowest...")
+        - Status Flag: unclear (if user asks "distribution by status")
+        
+        ANALYSIS FOR: "{task}"
+        Does this ask to compare/aggregate across ALL values, or filter to specific values?
         """
         
         try:
@@ -422,8 +448,10 @@ class KPIEditorNode:
         3. Keep the original SELECT and FROM structure
         4. Only add the minimal changes needed to fulfill the user request
         5. ALWAYS enforce NOT NULL conditions for EVERY column included in GROUP BY:
-           - For string GROUP BY columns: add WHERE TRIM([Column]) <> '' AND [Column] IS NOT NULL
-           - For numeric/date GROUP BY columns: add WHERE [Column] IS NOT NULL
+           - ONLY use TRIM() on string types (varchar, nvarchar, char). Check data_type in metadata.
+           - NEVER TRIM: date, datetime, int, decimal, bit, numeric, money columns.
+           - String columns: WHERE TRIM([Column]) <> '' AND [Column] IS NOT NULL
+           - Non-string columns: WHERE [Column] IS NOT NULL
         
         When deciding on which date column to use:
         If in the user request, it says something related to "open claims", use the column "Opened Date" for date filtering.
@@ -435,7 +463,14 @@ class KPIEditorNode:
         - If both a CODE column and a NAME column exist for the same entity (e.g., [Driver Manager] code, [Driver Manager Name] name), then:
           1) Prefer using the CODE column in WHERE/GROUP BY for filtering/grouping.
           2) SELECT both columns for readability (code + name).
-          3) Apply NOT NULL and TRIM checks to the NAME column if the request requires non-null names.
+          3) Apply NOT NULL checks to NAME column. Only TRIM if NAME is string type (check data_type).
+        
+        CRITICAL GROUP BY RULE (ALWAYS APPLY):
+        - ALWAYS use CODE columns in GROUP BY, NEVER NAME columns (unless user explicitly requests grouping by name).
+        - Default behavior: GROUP BY [Code Column], then SELECT both [Code Column] and [Name Column] for display.
+        - Example: GROUP BY [Customer Code] - then SELECT [Customer Code], [Customer Name]
+        - NEVER: GROUP BY [Customer Code], [Customer Name] (this is wrong!)
+        - Only exception: If user explicitly says something like "group by customer name" or "group by name"
         CRITICAL SQL SERVER SYNTAX RULES:
         - ALL column names with spaces MUST be wrapped in square brackets: [Column Name]
         - Use proper SQL Server date functions: MONTH(), YEAR(), GETDATE()

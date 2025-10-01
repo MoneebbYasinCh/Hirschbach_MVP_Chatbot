@@ -229,9 +229,7 @@ def main():
                 
                 # Display data if available
                 if message.get("has_data") and message.get("data") is not None:
-                    st.markdown('<div class="data-section">', unsafe_allow_html=True)
                     st.subheader("📊 Retrieved Data")
-                    
                     
                     # Display the data
                     st.dataframe(message["data"], width='stretch')
@@ -247,11 +245,9 @@ def main():
                 else:
                     # Show SQL query even if no data
                     if message.get("sql_query"):
-                        st.markdown('<div class="data-section">', unsafe_allow_html=True)
                         st.subheader("🔍 Generated SQL Query")
                         st.code(message["sql_query"], language="sql")
                         st.info("ℹ️ This query was generated but not executed (no data returned)")
-                        st.markdown('</div>', unsafe_allow_html=True)
                 
                 # Display insights if available
                 if message.get("has_insights") and message.get("insights"):
@@ -259,15 +255,20 @@ def main():
                     
                     # Key findings
                     if insights.get("key_findings"):
-                        st.subheader("Key Findings")
+                        st.subheader("🔍 Key Findings")
                         for finding in insights["key_findings"]:
                             st.markdown(f"• {finding}")
                     
                     # Recommendations
                     if insights.get("recommendations"):
-                        st.subheader("Recommendations")
+                        st.subheader("💡 Recommendations")
                         for rec in insights["recommendations"]:
-                            st.markdown(f"💡 {rec}")
+                            st.markdown(f"• {rec}")
+                    
+                    # SQL Query Reasoning - moved to the end
+                    if insights.get("sql_query_reasoning"):
+                        st.subheader("🧠 SQL Query Reasoning")
+                        st.markdown(insights["sql_query_reasoning"])
         
         st.markdown('</div>', unsafe_allow_html=True)
     

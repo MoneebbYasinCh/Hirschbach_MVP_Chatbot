@@ -39,51 +39,103 @@ class LLMCheckerNode:
             else:
                 task = state.get("task", "")
 
-        # Minimal smart scope check using dynamic metadata (no hardcoding)
+        # Confidence-based scope check - permissive by default
         try:
             metadata_results = state.get("metadata_rag_results", []) or []
-            # Build a compact, LLM-friendly list of available columns
+            # Build comprehensive list of available columns (NO LIMIT - show all)
             available_cols = []
-            for col in metadata_results[:30]:  # keep short
+            for col in metadata_results:  # Show ALL columns
                 name = col.get("column_name", "").strip()
                 desc = col.get("description", "").strip()
                 if name:
                     available_cols.append(f"- {name}: {desc}")
 
-            # Only run scope check if we have any metadata
+            # Only run scope check if we have metadata and task
             if available_cols and task:
                 scope_prompt = f"""
-                You are validating whether a user's request can be answered strictly using the following available columns.
-                If the request requires data outside these columns (e.g., telematics/speeding events), classify it as OUT_OF_SCOPE.
+Analyze if this request can be answered with the available columns.
 
-                USER REQUEST:
-                "{task}"
+USER REQUEST: "{task}"
 
-                AVAILABLE COLUMNS (name: description):
-                {chr(10).join(available_cols)}
+AVAILABLE COLUMNS (name: description):
+{chr(10).join(available_cols)}
 
-                Respond with only one word: IN_SCOPE or OUT_OF_SCOPE.
-                """
+CRITICAL: Only mark as OUT_OF_SCOPE if you are HIGHLY CONFIDENT (90%+) that the request requires data that is clearly NOT represented in any of these columns.
+
+If there's ANY possibility the request could be answered with these columns, mark it as IN_SCOPE.
+
+Examples of CLEAR OUT_OF_SCOPE (reject these):
+- "Show me real-time GPS locations" (requires live telematics data)
+- "What are driver speeding events?" (requires telematics/speed data)
+- "Show me vehicle maintenance schedules" (requires maintenance system data)
+- "What's the weather during accidents?" (requires weather API data)
+
+Examples of IN_SCOPE (accept these even if indirect):
+- "Which customers have the most claims?" → Customer Code, Claim Number (IN_SCOPE)
+- "Show me accident trends" → Occurrence Date, Accident Code (IN_SCOPE)
+- "What are high-risk drivers?" → Driver info, Preventable Flag (IN_SCOPE)
+- "Claims by location" → Claim City, Claim State (IN_SCOPE)
+
+Respond in JSON:
+{{
+    "decision": "IN_SCOPE" or "OUT_OF_SCOPE",
+    "confidence": "HIGH" or "MEDIUM" or "LOW",
+    "reasoning": "Brief explanation"
+}}
+
+DEFAULT: If unsure, choose IN_SCOPE.
+"""
 
                 scope_resp = self.llm.invoke(scope_prompt)
-                scope_text = str(getattr(scope_resp, "content", "")).strip().upper()
-
-                if "OUT_OF_SCOPE" in scope_text:
-                    state["llm_check_result"] = {
-                        "decision_type": "out_of_scope",
-                        "reasoning": "Request needs data not represented in available columns",
-                        "confidence": "HIGH"
-                    }
-                    state["final_response"] = (
-                        "I don't have access to that data. I can analyze claims in PRD.CLAIMS_SUMMARY "
-                        "using the columns available to me. If you want, I can answer related claims "
-                        "questions like counts, trends, types, locations, or dates."
-                    )
-                    state["workflow_status"] = "complete"
-                    state["next_node"] = "end"
-                    return state
-        except Exception:
-            # Fail open to existing behavior if scope check has any issue
+                scope_content = str(getattr(scope_resp, "content", "")).strip()
+                
+                # Clean up the response - remove markdown code blocks if present
+                if scope_content.startswith("```json"):
+                    scope_content = scope_content[7:]
+                elif scope_content.startswith("```"):
+                    scope_content = scope_content[3:]
+                if scope_content.endswith("```"):
+                    scope_content = scope_content[:-3]
+                scope_content = scope_content.strip()
+                
+                # Parse JSON response
+                try:
+                    import json
+                    scope_result = json.loads(scope_content)
+                    decision = scope_result.get("decision", "IN_SCOPE").upper()
+                    confidence = scope_result.get("confidence", "LOW").upper()
+                    reasoning = scope_result.get("reasoning", "")
+                    
+                    # Only block if BOTH out of scope AND high confidence
+                    if decision == "OUT_OF_SCOPE" and confidence == "HIGH":
+                        print(f"🚫 [LLM_CHECKER] OUT_OF_SCOPE (High Confidence): {reasoning}")
+                        state["llm_check_result"] = {
+                            "decision_type": "out_of_scope",
+                            "reasoning": reasoning,
+                            "confidence": confidence
+                        }
+                        state["final_response"] = (
+                            f"I cannot answer this request because it requires data that is not available in my current dataset.\n\n"
+                            f"**Reason:** {reasoning}\n\n"
+                            f"I can help you analyze claims data including customer information, claim types, dates, "
+                            f"locations, financial metrics, and risk factors. Would you like to ask a related question?"
+                        )
+                        state["workflow_status"] = "complete"
+                        state["next_node"] = "end"
+                        return state
+                    else:
+                        # IN_SCOPE or not confident enough - let it proceed
+                        print(f"✅ [LLM_CHECKER] IN_SCOPE - Proceeding with request")
+                        
+                except json.JSONDecodeError as e:
+                    # If JSON parsing fails, default to IN_SCOPE
+                    print(f"⚠️ [LLM_CHECKER] Could not parse scope response - defaulting to IN_SCOPE")
+                    print(f"⚠️ [LLM_CHECKER] Raw response: {scope_content[:200]}...")
+                    pass
+                    
+        except Exception as e:
+            # Always fail open - let the request proceed
+            print(f"⚠️ [LLM_CHECKER] Scope check error: {str(e)} - defaulting to IN_SCOPE")
             pass
         
         # Get KPI results from the state

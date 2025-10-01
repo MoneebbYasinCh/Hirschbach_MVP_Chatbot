@@ -82,7 +82,7 @@ class SQLGenerationNode:
             mapped_values = self._map_user_intent_to_values(user_query, needed_columns, entity_mapping_data)
             
             # Step 4: Generate final SQL with exact values
-            final_sql = self._generate_final_sql(user_query, metadata_results, mapped_values)
+            final_sql = self._generate_final_sql(user_query, needed_columns, metadata_results, mapped_values)
             
             # Update state
             state["sql_generation_status"] = "completed"
@@ -133,10 +133,12 @@ class SQLGenerationNode:
         
         # Smart selection prompt using column descriptions
         analysis_prompt = f"""
-        TASK: Select the minimal set of columns needed to answer the user's request.
+        You are SQL expert with 10+ years of experience. Your role is to select the minimal set of columns needed to answer the user's request for generating an SQL query.
 
-        USER REQUEST:
+        ## User Request:
         "{user_query}"
+        
+        IMPORTANT: Pay special attention to terms like "driver leader" - this refers to the DRIVER'S MANAGER/SUPERVISOR, not the driver themselves. Look for "Driver Manager" columns when you see "leader" in driver context.
 
         AVAILABLE COLUMNS (name, type, description, relevance):
         {chr(10).join(column_details)}
@@ -149,6 +151,23 @@ class SQLGenerationNode:
           • Use NAME columns for display and NOT NULL checks.
         - How to detect pairs (semantic): two columns clearly referring to the same entity where one is a human-readable label (often ends with "Name" or says "Full name") and the other is an identifier/code (mentions "code", "identifier", or is short alphanumeric).
 
+        CRITICAL SEMANTIC MAPPING:
+        When the user mentions these terms, map them to these specific column patterns:
+        - "driver leader", "driver supervisor", "driver manager" → Look for columns containing "Driver Manager" (both Name and Code versions)
+        - "leader", "supervisor", "manager" (in driver context) → Look for "Driver Manager" columns
+        - "top driver", "best driver", "driver performance" → Look for "Driver" columns (both Name and Code versions)
+        - "claims", "accidents", "incidents" → Look for accident/claim related columns
+        - "crash", "collision" → Look for "Accident or Incident Code" or similar
+
+        DATE COLUMN PRIORITY RULES:
+        When selecting date columns for time-based analysis, prioritize in this order:
+        1. "Occurrence Date" - Primary field for when incidents actually happened
+        2. "Create Date" - When records were created in system
+        3. "Create DateTime" - When records were created (with time)
+        4. Other date columns based on context
+        
+        For claims analysis, ALWAYS prefer "Occurrence Date" over "Create Date/DateTime" unless user specifically asks about when claims were filed/created.
+
         AVAILABLE COLUMN NAMES:
         {', '.join(available_columns)}
 
@@ -159,6 +178,11 @@ class SQLGenerationNode:
         - If a NAME column appears, its CODE counterpart MUST also appear.
         - Example:
           {{"needed_columns": ["Entity Code", "Entity Name", "Occurrence Date"]}}
+        
+        SPECIFIC EXAMPLES:
+        - For "driver leader" queries: {{"needed_columns": ["Driver Manager", "Driver Manager Name", "Occurrence Date", "Accident or Incident Code"]}}
+        - For time-based claims analysis: {{"needed_columns": ["Driver Code", "Driver Name", "Occurrence Date"]}}
+        - For "last 6 months" claims: Use "Occurrence Date", NOT "Create Date" or "Create DateTime"
         """
         
         try:
@@ -222,14 +246,39 @@ class SQLGenerationNode:
         Available columns with values:
         {entity_text}
         
-        IMPORTANT: Map the user's intent to the most appropriate values according to the available values and the input prompt:
-        - For "preventable claims" → use "P" (Preventable) from Preventable Flag
-        - For "non-preventable claims" → use "N" (Non-preventable) from Preventable Flag
-        - For "current month" → use appropriate date filtering
-        - Match the user's specific request to the exact values that would filter the data correctly
+        CRITICAL: Distinguish between FILTERING queries vs AGGREGATION queries:
+        
+        === DO NOT MAP (Return "none" for these columns) ===
+        If the query asks for comparison/aggregation across ALL entities:
+        - Comparison keywords: "which", "what", "compare", "versus", "vs"
+        - Aggregation keywords: "distribution of", "breakdown by", "for each", "by", "across"
+        - Ranking keywords: "top", "lowest", "highest", "rank", "most", "least", "best", "worst"
+        - Grouping keywords: "all", "every", "each type of", "group by"
+        
+        Examples of when NOT to map:
+        - "Which customer has the lowest sum?" → Do NOT map Customer Code (need all customers)
+        - "What statuses have the most claims?" → Do NOT map Status Flag (need all statuses)
+        - "Compare claims by type" → Do NOT map claim type (need all types)
+        - "Distribution of claims across categories" → Do NOT map categories (need all)
+        
+        === DO MAP (Return exact values) ===
+        Only map when user specifies EXACT entities/values to filter:
+        - Specific entity: "Show me Walmart claims" → Map Customer Code to specific value
+        - Specific status: "Show me preventable claims" → Map Preventable Flag to "P"
+        - Specific category: "closed claims only" → Map Status Flag to "Closed"
+        - Specific time: "current month" → Map to appropriate date filtering
+        
+        Examples of when TO map:
+        - "preventable claims" → Preventable Flag: P
+        - "non-preventable claims" → Preventable Flag: N
+        - "Walmart customer" → Customer Code: WALMART (if exists in values)
+        - "closed claims" → Status Flag: Closed
+        
+        ANALYSIS FOR: "{user_query}"
+        Does this ask to compare/aggregate across ALL values, or filter to specific values?
         
         Map user intent to exact values. Format: Column1: value1, Column2: value2
-        If no specific values needed, return: none
+        If no specific values needed (aggregation/comparison query), return: none
         """
         
         try:
@@ -259,18 +308,26 @@ class SQLGenerationNode:
             print(f"⚠️ [SQL_GEN] Error mapping user intent to values: {str(e)}")
             return {}
     
-    def _generate_final_sql(self, user_query: str, metadata_results: List[Dict], mapped_values: Dict[str, str]) -> str:
+    def _generate_final_sql(self, user_query: str, needed_columns: List[str], metadata_results: List[Dict], mapped_values: Dict[str, str]) -> str:
         """Generate final SQL with exact values (like KPI editor)"""
         
-        # Format metadata for prompt
-        if metadata_results:
+        # Format metadata for prompt - ONLY use needed columns
+        if metadata_results and needed_columns:
             formatted_columns = []
-            for col in metadata_results:
-                col_name = col.get('column_name', '')
-                col_desc = col.get('description', '')
-                col_type = col.get('data_type', '')
-                formatted_columns.append(f"- {col_name} ({col_type}): {col_desc}")
+            # Create a lookup dict for faster access
+            metadata_lookup = {col.get('column_name', ''): col for col in metadata_results}
+            
+            # Only format the needed columns
+            for col_name in needed_columns:
+                if col_name in metadata_lookup:
+                    col = metadata_lookup[col_name]
+                    col_desc = col.get('description', '')
+                    col_type = col.get('data_type', '')
+                    formatted_columns.append(f"- {col_name} ({col_type}): {col_desc}")
+            
             metadata_text = "\n".join(formatted_columns)
+            print(f"🔧 [SQL_GEN] Debug - Filtered columns for SQL generation: {needed_columns}")
+            print(f"🔧 [SQL_GEN] Debug - Formatted metadata text: {metadata_text}")
         else:
             metadata_text = "No metadata available"
         
@@ -280,45 +337,142 @@ class SQLGenerationNode:
             values_text = f"Use these exact values: {mapped_values}"
         
         prompt = f"""
-        Generate a SQL query for claims_summary table based on the user request.
+        # Professional SQL Query Generation Prompt
 
-        USER REQUEST: "{user_query}"
-        
-        AVAILABLE COLUMNS:
-        {metadata_text}
-        
-        {values_text}
-        
-        Use SQL Server syntax: wrap column names with spaces in square brackets [Column Name]
-        Use table name: PRD.CLAIMS_SUMMARY
-        For date filtering, use SQL Server functions like DATEPART, YEAR, MONTH instead of DATE_TRUNC
+You are an expert SQL query generator specializing in SQL Server syntax. Your task is to convert natural language requests into precise, optimized SQL queries following strict guidelines and best practices.
 
-        When deciding on which date column to use:
-        If in the user request, it says something related to "open claims", use the column "Opened Date" for date filtering.
-        If in the user request, it says something related to "closed claims", use the column "Close Date" for date filtering.
-        If in the user request, there isnt mention of open or closed claims, use the column "Occurrence Date" for date filtering.
-        If in the user request, the user mentions a specific date column name, use that column for date filtering by matching it with the column present in the available columns.
+## CRITICAL REMINDER
+- Use ONLY the columns provided in the AVAILABLE COLUMNS section below
+- Do NOT substitute similar-sounding column names
+- Use the EXACT column names provided - no substitutions or variations
 
-        CRITICAL COLUMN PAIR RULE (apply strictly) (this is just one example):
-        - If both [Driver Manager] (code) and [Driver Manager Name] (name) exist:
-          1) You MUST use [Driver Manager] in WHERE and GROUP BY for all filtering/grouping.
-          2) You MUST also SELECT [Driver Manager Name] for readability.
-          3) If non-null name is requested, apply IS NOT NULL and TRIM([Driver Manager Name]) <> '' to the NAME column only.
-          4) NEVER filter by [Driver Manager Name]. Always filter by [Driver Manager].
-        The same should be done for other code and name pairs like the example given above.
+## Your Mission
+Analyze the user's request step-by-step and generate a SQL query that accurately fulfills their requirements while adhering to all formatting, filtering, and structural rules defined below.
 
-        IMPORTANT: Filter out null and empty values for better data quality where necessary:
-        - Use WHERE [Column] IS NOT NULL AND TRIM([Column]) <> '' for string columns
-        - Use WHERE [Column] IS NOT NULL for numeric/date columns
-        - This ensures accurate counts and prevents null values from skewing results when needed.
-        - ALWAYS enforce NOT NULL conditions for EVERY column included in GROUP BY:
-          • For string GROUP BY columns: add WHERE TRIM([Column]) <> '' AND [Column] IS NOT NULL
-          • For numeric/date GROUP BY columns: add WHERE [Column] IS NOT NULL
+---
 
-        DEFAULT SORTING (unless the user specifies otherwise):
-        - If the result contains a numeric aggregate or date, ORDER BY that column in DESC order.
-        
-        Return only the SQL query.
+## Step-by-Step Process
+
+### Step 1: Understand the User Request
+- Parse the **USER REQUEST**: "{user_query}"
+- Identify what data the user wants to retrieve
+- Determine any filtering conditions, aggregations, or groupings needed
+
+        ### Step 2: Review Available Schema
+        - **AVAILABLE COLUMNS**: {metadata_text}
+        - **MAPPED VALUES**: {values_text}
+        - **CRITICAL**: You MUST ONLY use the columns listed above in the AVAILABLE COLUMNS section
+        - **CRITICAL**: Do NOT substitute similar-sounding columns (e.g., don't use "Entity Code" if "Entity Manager" is provided)
+        - **CRITICAL**: Use the EXACT column names provided - no substitutions or variations
+        - Match user's intent with appropriate columns from the metadata
+        - Verify data types for each column you plan to use
+
+### Step 3: Apply SQL Server Syntax Rules
+- **Table Name**: Use `PRD.CLAIMS_SUMMARY`
+- **Column Names with Spaces**: Wrap in square brackets: `[Column Name]`
+- **Date Functions**: Use SQL Server functions like `DATEPART`, `YEAR`, `MONTH` instead of `DATE_TRUNC`
+
+### Step 4: Determine Date Column Logic
+Apply this decision tree for date filtering:
+- If user mentions **"open claims"** → Use `[Opened Date]`
+- If user mentions **"closed claims"** → Use `[Close Date]`
+- If user mentions a **specific date column name** → Use that exact column (match with available columns)
+- If **no date context** is provided → Use `[Occurrence Date]` as default
+
+### Step 4.5: Apply Incident Type Filtering
+- If user mentions specific incident types (crash, accident, etc.) → Look for incident/code columns in available schema and filter accordingly
+- Match the user's terminology to the appropriate code column and values
+
+### Step 5: Apply CRITICAL COLUMN PAIR RULE
+When CODE and NAME column pairs exist (e.g., `[Entity Manager]` and `[Entity Manager Name]`):
+
+1. **ALWAYS use CODE column** in `GROUP BY` clauses and NEVER the NAME column unless user explicitly requests it.
+2. **ALWAYS SELECT both** CODE and NAME columns for readability in SELECT clause.
+3. **Apply `IS NOT NULL`** to the NAME column AND in the CODE column if the column is not nullable.
+4. **Only use `TRIM()`** if NAME column is string type (check `data_type` in metadata)
+5. **NEVER filter by NAME column** - always filter by CODE column
+
+        **Example Pattern:**
+        ```
+        WHERE [Entity Manager] = 'some_value'  -- Filter by CODE
+          AND [Entity Manager Name] IS NOT NULL  -- NULL check on NAME
+        GROUP BY [Entity Manager]  -- Group by CODE ONLY (never group by NAME)
+        SELECT [Entity Manager], [Entity Manager Name]  -- Display both
+        ```
+
+        **WRONG Example (NEVER do this):**
+        ```
+        GROUP BY [Entity Manager], [Entity Manager Name]  -- ❌ WRONG! Don't group by NAME columns
+        ```
+
+Apply this same pattern to ALL code/name column pairs.
+
+### Step 6: Apply CRITICAL GROUP BY RULE
+**Default Behavior (ALWAYS follow unless explicitly overridden):**
+- **ALWAYS use ONLY CODE columns in GROUP BY**
+- **NEVER use NAME columns in GROUP BY** (unless user explicitly requests grouping by name)
+- **SELECT both CODE and NAME** for display purposes
+- **CRITICAL:** NAME columns are for display only - they should NEVER appear in GROUP BY clauses
+
+        **Correct Pattern:**
+        ```
+        GROUP BY [Entity Code]
+        SELECT [Entity Code], [Entity Name]
+        ```
+
+        **WRONG Pattern (NEVER do this):**
+        ```
+        GROUP BY [Entity Code], [Entity Name]  -- ❌ WRONG! NAME columns don't belong in GROUP BY
+        ```
+
+**Exception:** Only group by NAME if user explicitly says "group by [name column]" or "group by name"
+
+**REMEMBER:** CODE columns are unique identifiers for grouping. NAME columns are human-readable labels for display only.
+
+### Step 7: Enforce Data Quality Filters
+Apply appropriate null and empty value filters based on data type:
+
+**For String Types** (varchar, nvarchar, char):
+```
+WHERE TRIM([Column]) <> '' AND [Column] IS NOT NULL
+```
+
+**For Non-String Types** (date, datetime, int, decimal, bit, numeric, money):
+```
+WHERE [Column] IS NOT NULL
+```
+
+**CRITICAL:** Check `data_type` in metadata before using `TRIM()` - NEVER TRIM non-string columns!
+
+**ALWAYS enforce `IS NOT NULL` for EVERY column in GROUP BY clause.**
+
+### Step 8: Apply Default Sorting
+Unless user specifies otherwise:
+- If result contains a **numeric aggregate** (COUNT, SUM, AVG, etc.) → `ORDER BY` that column `DESC`
+- If result contains a **date column** → `ORDER BY` that column `DESC`
+- Default to descending order for better insights (most recent/highest values first)
+
+---
+
+## Output Format
+Return **ONLY** the SQL query. No explanations, no markdown code blocks, no additional text.
+
+---
+
+## Final Checklist Before Generating Query
+- [ ] Correct table name used: `PRD.CLAIMS_SUMMARY`
+- [ ] **CRITICAL:** ONLY used columns from the AVAILABLE COLUMNS list above
+- [ ] Columns with spaces wrapped in `[square brackets]`
+- [ ] Correct date column selected based on context
+- [ ] CODE columns used in WHERE and GROUP BY (not NAME columns)
+- [ ] Both CODE and NAME columns selected for display
+- [ ] **CRITICAL:** ONLY CODE columns in GROUP BY clause (NO NAME columns)
+- [ ] `IS NOT NULL` applied to all GROUP BY columns
+- [ ] `TRIM()` only used on string type columns
+- [ ] Appropriate sorting applied
+- [ ] SQL Server syntax used throughout
+
+**Now generate the SQL query for the user's request.**
         """
         
         try:
