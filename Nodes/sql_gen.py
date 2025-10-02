@@ -372,6 +372,41 @@ Analyze the user's request step-by-step and generate a SQL query that accurately
 - **Column Names with Spaces**: Wrap in square brackets: `[Column Name]`
 - **Date Functions**: Use SQL Server functions like `DATEPART`, `YEAR`, `MONTH` instead of `DATE_TRUNC`
 
+### Step 3.5: CRITICAL SQL Server Syntax Requirements
+**LIMIT CLAUSE REPLACEMENT (CRITICAL):**
+- **NEVER use `LIMIT`** - SQL Server does NOT support LIMIT clause
+- **Use `TOP` for simple row limiting:**
+  ```sql
+  SELECT TOP 10 [Column1], [Column2] FROM PRD.CLAIMS_SUMMARY
+  ```
+- **Use `OFFSET FETCH` for pagination:**
+  ```sql
+  SELECT [Column1], [Column2] FROM PRD.CLAIMS_SUMMARY
+  ORDER BY [Column1]
+  OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
+  ```
+
+**SQL Server Specific Syntax:**
+- **String Concatenation**: Use `+` instead of `||` or `CONCAT()`
+- **Date Formatting**: Use `FORMAT()` or `CONVERT()` instead of `TO_CHAR()`
+- **Case Sensitivity**: Use `COLLATE` if needed for case-sensitive operations
+- **Boolean Logic**: Use `BIT` type, not `BOOLEAN`
+
+**COMMON SQL SERVER PATTERNS:**
+```sql
+-- Top N results (replace LIMIT N)
+SELECT TOP 5 [Driver Manager], [Driver Manager Name], COUNT(*) AS Claims
+FROM PRD.CLAIMS_SUMMARY
+GROUP BY [Driver Manager], [Driver Manager Name]
+ORDER BY Claims DESC
+
+-- Pagination (replace LIMIT offset, count)
+SELECT [Column1], [Column2]
+FROM PRD.CLAIMS_SUMMARY
+ORDER BY [Column1]
+OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY
+```
+
 ### Step 4: Determine Date Column Logic
 Apply this decision tree for date filtering:
 - If user mentions **"open claims"** → Use `[Opened Date]`
@@ -470,7 +505,10 @@ Return **ONLY** the SQL query. No explanations, no markdown code blocks, no addi
 - [ ] `IS NOT NULL` applied to all GROUP BY columns
 - [ ] `TRIM()` only used on string type columns
 - [ ] Appropriate sorting applied
-- [ ] SQL Server syntax used throughout
+- [ ] **CRITICAL:** NO `LIMIT` clause used - use `TOP` or `OFFSET FETCH` instead
+- [ ] **CRITICAL:** SQL Server syntax used throughout (no MySQL/PostgreSQL syntax)
+- [ ] String concatenation uses `+` not `||`
+- [ ] Date functions use SQL Server equivalents
 
 **Now generate the SQL query for the user's request.**
         """
