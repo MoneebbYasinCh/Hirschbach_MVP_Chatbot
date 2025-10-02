@@ -13,7 +13,7 @@ class SQLGenerationNode:
                 azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
                 api_key=os.getenv("AZURE_OPENAI_API_KEY"),
                 api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-07-18"),
-                temperature=0.1
+                temperature=0.0
             )
             
             # Initialize entity mapping tool
@@ -262,10 +262,12 @@ class SQLGenerationNode:
         - "Distribution of claims across categories" → Do NOT map categories (need all)
         
         === DO MAP (Return exact values) ===
-        Only map when user specifies EXACT entities/values to filter:
+        Map when user specifies EXACT entities/values to filter OR generic filtering terms:
         - Specific entity: "Show me Walmart claims" → Map Customer Code to specific value
         - Specific status: "Show me preventable claims" → Map Preventable Flag to "P"
         - Specific category: "closed claims only" → Map Status Flag to "Closed"
+        - Generic filtering: "crash claims" → Map Accident or Incident Code to "Crash"
+        - Generic filtering: "accident claims" → Map Accident or Incident Code to "Crash"
         - Specific time: "current month" → Map to appropriate date filtering
         
         Examples of when TO map:
@@ -273,17 +275,33 @@ class SQLGenerationNode:
         - "non-preventable claims" → Preventable Flag: N
         - "Walmart customer" → Customer Code: WALMART (if exists in values)
         - "closed claims" → Status Flag: Closed
+        - "crash claims" → Accident or Incident Code: Crash
+        - "accident patterns" → Accident or Incident Code: Crash
         
         ANALYSIS FOR: "{user_query}"
-        Does this ask to compare/aggregate across ALL values, or filter to specific values?
+        
+        IMPORTANT: You MUST use the EXACT values from the entity mapping tool. Do NOT guess or substitute values.
+        
+        For each column, use the mapped values provided:
+        - Customer Code: Use exact codes like WALMAA, WALMAD, etc. (NOT WALMART)
+        - Customer Name: Use exact names like WALMART STORES (BILLING), etc.
+        - Other columns: Use the exact values from the mapping tool
+        
+        Examples:
+        - "walmart claims" → Map Customer Code: WALMAA (use exact code from mapping tool)
+        - "identify patterns in crash claims" → Map Accident or Incident Code: Crash (use exact value)
+        - "analyze highway incidents" → Map Road Type: HIGHWAY/INTERSTATE (use exact value)
+        - "compare all claim types" → Return: none (truly comparing ALL types)
         
         Map user intent to exact values. Format: Column1: value1, Column2: value2
-        If no specific values needed (aggregation/comparison query), return: none
+        If no filtering terms are present, return: none
         """
         
         try:
             response = self.llm.invoke(prompt)
             mapping_result = response.content.strip()
+            
+            print(f"🔧 [SQL_GEN] Debug - LLM mapping response: {mapping_result}")
             
             # Parse the mapping result
             mapped_values = {}
@@ -333,6 +351,7 @@ class SQLGenerationNode:
         
         # Format mapped values
         values_text = ""
+        print(f"🔧 [SQL_GEN] Debug - Mapped values passed to SQL generation: {mapped_values}")
         if mapped_values:
             values_text = f"CRITICAL: Use these EXACT mapped values (do not substitute or modify): {mapped_values}"
         

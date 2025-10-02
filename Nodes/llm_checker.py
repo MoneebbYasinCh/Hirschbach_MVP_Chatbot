@@ -126,6 +126,7 @@ DEFAULT: If unsure, choose IN_SCOPE.
                     else:
                         # IN_SCOPE or not confident enough - let it proceed
                         print(f"✅ [LLM_CHECKER] IN_SCOPE - Proceeding with request")
+                        print(f"🔍 [LLM_CHECKER] Decision: IN_SCOPE")
                         
                 except json.JSONDecodeError as e:
                     # If JSON parsing fails, default to IN_SCOPE
@@ -238,6 +239,7 @@ DEFAULT: If unsure, choose IN_SCOPE.
             print(f"🧠 [LLM_CHECKER] Decision: {decision_type.upper()} → {next_node}")
             print(f"  Task: {task}")
             print(f"  KPI: {kpi_metric}")
+            print(f"🔍 [LLM_CHECKER] Decision: {decision_type}")
             
             # If perfect match, also show the SQL that will be executed
             if decision_type == "perfect_match" and kpi_sql:

@@ -25,14 +25,14 @@ class MetadataRetrievalNode:
                 azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
                 api_key=os.getenv("AZURE_OPENAI_API_KEY"),
                 api_version=api_version,
-                temperature=0.3
+                temperature=0.0
             )
         else:
             self.llm = AzureChatOpenAI(
                 azure_deployment=deployment_name,
                 azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
                 api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-                temperature=0.3
+                temperature=0.0
             )
         
         # Initialize Azure OpenAI client for embeddings
@@ -70,7 +70,7 @@ class MetadataRetrievalNode:
     
     def _create_embedding(self, text: str) -> List[float]:
         """Create embedding for text using Azure OpenAI"""
-        embeddings_deployment = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "text-embedding-3-small")
+        embeddings_deployment = os.getenv("AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT", "text-embedding-3-large")
         response = self.openai_client.embeddings.create(
             input=text,
             model=embeddings_deployment

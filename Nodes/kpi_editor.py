@@ -16,7 +16,7 @@ class KPIEditorNode:
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-07-18"),
-            temperature=0.1
+            temperature=0.0
         )
         
         # Initialize entity mapping tool

@@ -26,7 +26,7 @@ class EntityMappingTool:
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
             api_key=os.getenv("AZURE_OPENAI_API_KEY"),
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-07-18"),
-            temperature=0.1
+            temperature=0.0
         )
         
         # Load CSV data
@@ -83,7 +83,9 @@ class EntityMappingTool:
                 "success": True
             }
             
-            print(f"✅ [ENTITY MAPPING] Found {len(available_values)} values for '{column_name}': {available_values}")
+            # Show only first 3 values and count
+            preview = available_values[:3] if len(available_values) > 3 else available_values
+            print(f"✅ [ENTITY MAPPING] Found {len(available_values)} values for '{column_name}': {preview}{'...' if len(available_values) > 3 else ''}")
             return result
                     
         except Exception as e:
@@ -138,7 +140,9 @@ class EntityMappingTool:
                 "sample_values_raw": sample_values
             }
             
-            print(f"📊 [ENTITY MAPPING] Found {len(parsed_values)} values for '{column_name}' (source: {source}): {parsed_values}")
+            # Show only first 3 values and count
+            preview = parsed_values[:3] if len(parsed_values) > 3 else parsed_values
+            print(f"📊 [ENTITY MAPPING] Found {len(parsed_values)} values for '{column_name}' (source: {source}): {preview}{'...' if len(parsed_values) > 3 else ''}")
             return result
             
         except Exception as e:
