@@ -334,7 +334,7 @@ class SQLGenerationNode:
         # Format mapped values
         values_text = ""
         if mapped_values:
-            values_text = f"Use these exact values: {mapped_values}"
+            values_text = f"CRITICAL: Use these EXACT mapped values (do not substitute or modify): {mapped_values}"
         
         prompt = f"""
         # Professional SQL Query Generation Prompt
@@ -364,6 +364,7 @@ Analyze the user's request step-by-step and generate a SQL query that accurately
         - **CRITICAL**: You MUST ONLY use the columns listed above in the AVAILABLE COLUMNS section
         - **CRITICAL**: Do NOT substitute similar-sounding columns (e.g., don't use "Entity Code" if "Entity Manager" is provided)
         - **CRITICAL**: Use the EXACT column names provided - no substitutions or variations
+        - **CRITICAL**: If MAPPED VALUES are provided, use those EXACT values in your WHERE clauses - do not substitute with similar terms
         - Match user's intent with appropriate columns from the metadata
         - Verify data types for each column you plan to use
 
@@ -391,6 +392,10 @@ Analyze the user's request step-by-step and generate a SQL query that accurately
 - **Date Formatting**: Use `FORMAT()` or `CONVERT()` instead of `TO_CHAR()`
 - **Case Sensitivity**: Use `COLLATE` if needed for case-sensitive operations
 - **Boolean Logic**: Use `BIT` type, not `BOOLEAN`
+- **Division Safety**: Use `NULLIF()` to prevent divide-by-zero errors
+  ```sql
+  ([Actual Amount] / NULLIF([Expected Amount], 0)) * 100
+  ```
 
 **COMMON SQL SERVER PATTERNS:**
 ```sql
@@ -509,6 +514,7 @@ Return **ONLY** the SQL query. No explanations, no markdown code blocks, no addi
 - [ ] **CRITICAL:** SQL Server syntax used throughout (no MySQL/PostgreSQL syntax)
 - [ ] String concatenation uses `+` not `||`
 - [ ] Date functions use SQL Server equivalents
+- [ ] Division operations use `NULLIF()` to prevent divide-by-zero errors
 
 **Now generate the SQL query for the user's request.**
         """

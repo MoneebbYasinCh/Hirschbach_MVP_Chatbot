@@ -108,31 +108,37 @@ class EntityMappingTool:
             row = column_data.iloc[0]
             
             # Try to get distinct values first
-            distinct_count = row.get('Distinct', 0)
+            distinct_values_raw = row.get('Distinct', '')
             sample_values = row.get('sample values', '')
             
-            # Parse sample values (e.g., "P, N, Unk" → ["P", "N", "Unk"])
-            if pd.notna(sample_values) and sample_values != '':
-                parsed_values = [v.strip() for v in str(sample_values).split(',') if v.strip()]
-                source = "sample_values"
+            # Parse distinct values first (the Distinct column contains the actual values, not a count)
+            if pd.notna(distinct_values_raw) and distinct_values_raw != '' and str(distinct_values_raw) != '#N/A':
+                # Parse distinct values from the Distinct column
+                distinct_str = str(distinct_values_raw)
+                # Remove quotes and split by comma
+                parsed_values = [v.strip().strip('"') for v in distinct_str.split(',') if v.strip()]
+                source = "distinct_values"
             else:
-                parsed_values = []
-                source = "none"
+                # Fall back to sample values if no distinct values available
+                if pd.notna(sample_values) and sample_values != '':
+                    parsed_values = [v.strip() for v in str(sample_values).split(',') if v.strip()]
+                    source = "sample_values"
+                else:
+                    parsed_values = []
+                    source = "none"
             
-            # If we have distinct count but no sample values, or if sample values seem incomplete
-            if isinstance(distinct_count, (int, float)) and distinct_count > 0 and (not parsed_values or len(parsed_values) < distinct_count):
-                # Try to get more values from the actual data if available
-                # For now, we'll use what we have from sample values
-                print(f"📊 [ENTITY MAPPING] Column '{column_name}' has {distinct_count} distinct values, but only {len(parsed_values)} sample values available")
+            # Log the results
+            if parsed_values:
+                print(f"📊 [ENTITY MAPPING] Column '{column_name}' has {len(parsed_values)} values from {source}")
             
             result = {
                 "values": parsed_values,
                 "source": source,
-                "distinct_count": distinct_count,
+                "distinct_count": len(parsed_values),
                 "sample_values_raw": sample_values
             }
             
-            print(f"📊 [ENTITY MAPPING] Found {len(parsed_values)} values for '{column_name}' (source: {source}, distinct: {distinct_count}): {parsed_values}")
+            print(f"📊 [ENTITY MAPPING] Found {len(parsed_values)} values for '{column_name}' (source: {source}): {parsed_values}")
             return result
             
         except Exception as e:

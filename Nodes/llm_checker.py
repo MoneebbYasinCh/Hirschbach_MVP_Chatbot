@@ -60,7 +60,7 @@ USER REQUEST: "{task}"
 AVAILABLE COLUMNS (name: description):
 {chr(10).join(available_cols)}
 
-CRITICAL: Only mark as OUT_OF_SCOPE if you are HIGHLY CONFIDENT (90%+) that the request requires data that is clearly NOT represented in any of these columns.
+CRITICAL: Only mark as OUT_OF_SCOPE if you are HIGHLY CONFIDENT (60%+) that the request requires data that is clearly NOT represented in any of these columns.
 
 If there's ANY possibility the request could be answered with these columns, mark it as IN_SCOPE.
 
