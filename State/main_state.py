@@ -4,7 +4,7 @@ import operator
 
 class HirschbachGraphState(TypedDict):
     """State for Hirschbach Risk Intelligence workflow"""
-    messages: Annotated[List[BaseMessage], operator.add]
+    messages: List[BaseMessage]  # Remove operator.add to prevent accumulation
     user_query: str  # Store the original user query
     
     # Main orchestration

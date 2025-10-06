@@ -105,19 +105,20 @@ class EndNode:
         Args:
             state: Current state to clean
         """
-        # Fields to preserve for UI display
+        # Fields to preserve for UI display AND CONTEXT PRESERVATION
         preserve_fields = {
-            "messages",           # Chat history
+            "messages",           # Chat history - CRITICAL for context preservation
             "final_response",     # Final response for UI
             "azure_data",         # Data results for UI tables
             "generated_insights", # Insights for UI display
-            "workflow_status"     # Completion status
+            "workflow_status",    # Completion status
+            "user_query"          # Keep user query for context
         }
         
         # Fields to clear (processing state)
         clear_fields = [
-            # Query processing
-            "user_query", "task", "orchestrator_decision",
+            # Query processing (keep user_query for context)
+            "task", "orchestrator_decision",
             
             # KPI processing
             "kpi_retrieval_completed", "top_kpi", "kpi_rag_results",

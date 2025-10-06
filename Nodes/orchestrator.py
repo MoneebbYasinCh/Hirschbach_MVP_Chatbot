@@ -40,14 +40,41 @@ class HirschbachOrchestrator:
             )
 
     def _format_history_as_text(self, messages: List[BaseMessage]) -> str:
-        """Format conversation history as text."""
+        """Format conversation history as text with context analysis."""
         if not messages:
             return ""
+        
         lines: List[str] = []
+        context_topics = []
+        data_requests = []
+        
         for msg in messages:
             role = "User" if isinstance(msg, HumanMessage) else ("Assistant" if isinstance(msg, AIMessage) else "System")
             content = str(getattr(msg, "content", "")).strip()
+            
+            # Limit content length for readability
+            if len(content) > 150:
+                content = content[:150] + "..."
+            
             lines.append(f"- {role}: {content}")
+            
+            # Extract context for better decision making
+            if isinstance(msg, HumanMessage):
+                content_lower = content.lower()
+                context_topics.append(content_lower)
+                
+                # Track data-related requests
+                if any(keyword in content_lower for keyword in ["show", "get", "find", "claims", "data", "report", "analyze"]):
+                    data_requests.append(content_lower)
+        
+        # Add context summary for better decision making
+        if context_topics:
+            recent_topics = context_topics[-3:]  # Last 3 user queries
+            lines.append(f"\n--- CONTEXT: Recent user interests: {', '.join(recent_topics)} ---")
+            
+        if data_requests:
+            lines.append(f"--- DATA REQUESTS: {len(data_requests)} data-related queries in conversation ---")
+        
         return "\n".join(lines)
     
     def __call__(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -82,7 +109,12 @@ class HirschbachOrchestrator:
         
         # Get conversation history for context
         messages = state.get("messages", [])
+        print(f"[ORCHESTRATOR] Received {len(messages)} messages in conversation")
+        
         history_text = self._format_history_as_text(messages[:-1])  # Exclude current message
+        print(f"[ORCHESTRATOR DEBUG] History being passed to LLM:")
+        print(f"[ORCHESTRATOR DEBUG] {history_text}")
+        print(f"[ORCHESTRATOR DEBUG] Current user input: {user_input}")
         
         # Decide: Direct reply or data analysis?
         if self._should_reply_directly(user_input, history_text):
@@ -125,7 +157,7 @@ class HirschbachOrchestrator:
     
     def _should_reply_directly(self, user_input: str, history_text: str) -> bool:
         """
-        Use LLM to decide whether to reply directly or perform data analysis
+        Use LLM to decide whether to reply directly or perform data analysis with conversation context
         
         Args:
             user_input: The user's input text
@@ -139,10 +171,17 @@ class HirschbachOrchestrator:
         
         Available data: You have access to one table called 'claims_summary' which contains aggregated data of claims on Claim Number level.
         
-        Conversation context:
+        CONVERSATION CONTEXT:
         {history_text}
 
-        User input: "{user_input}"
+        CURRENT USER INPUT: "{user_input}"
+        
+        IMPORTANT: Consider the conversation context when deciding. Look for:
+        - Follow-up questions that build on previous data requests
+        - Clarifications or refinements of earlier queries
+        - References to "that", "those", "more", "also", "what about" that imply continuation
+        - Context from previous exchanges that make the current input data-related
+        - Questions about "last message" or "previous" refer to messages BEFORE the current one
         
         DIRECT_REPLY for:
         - General questions about risk management concepts
@@ -159,8 +198,20 @@ class HirschbachOrchestrator:
         - Reports and analytics on claims
         - Questions about claims performance, trends, or patterns
         - Any data query that would require database analysis
+        - Follow-up questions that reference previous data analysis
+        - Refinements or modifications of previous data requests
         
-        Examples:
+        Context-aware examples:
+        - Previous: "Show me claims data" → Current: "What about last month?" → DATA_ANALYSIS
+        - Previous: "Claims by state" → Current: "Can you filter by California?" → DATA_ANALYSIS
+        - Previous: "What is a claim?" → Current: "How do I use this system?" → DIRECT_REPLY
+        - Previous: "Claims analysis" → Current: "Show me more details" → DATA_ANALYSIS
+        - Previous: "Risk data" → Current: "What about Texas specifically?" → DATA_ANALYSIS
+        - Previous: "Show me accident trends by state" → Current: "Tell me more about it" → DATA_ANALYSIS
+        - Previous: "Claims data analysis" → Current: "Give me more information" → DATA_ANALYSIS
+        - Previous: "Risk analysis" → Current: "Expand on that" → DATA_ANALYSIS
+        
+        Standard examples:
         - "What is preventable crash rate?" → DIRECT_REPLY
         - "How does claims data work?" → DIRECT_REPLY
         - "Show me claims in California" → DATA_ANALYSIS
@@ -193,7 +244,7 @@ class HirschbachOrchestrator:
     
     def _generate_direct_response(self, user_input: str, history_text: str) -> str:
         """
-        Generate a direct response for simple queries
+        Generate a context-aware direct response for simple queries
         
         Args:
             user_input: The user's input text
@@ -207,18 +258,34 @@ class HirschbachOrchestrator:
         
         Available data: You have access to one table called 'claims_summary' which contains aggregated data of claims on Claim Number level.
         
-        Conversation context:
+        CONVERSATION HISTORY (messages that happened BEFORE the current query):
         {history_text}
 
-        User query: "{user_input}"
+        CURRENT USER QUERY: "{user_input}"
+        
+        IMPORTANT: When the user asks about their "last message" or "previous message", they are referring to their most recent message in the CONVERSATION HISTORY above, NOT the current query.
+        
+        Example:
+        - If CONVERSATION HISTORY shows: "User: hello how are you" and "Assistant: Hello! I'm here to help"
+        - And CURRENT USER QUERY is: "What was my last message?"
+        - Then the answer should be: "Your last message was 'hello how are you'"
         
         Guidelines:
         - Keep your response concise and professional
+        - Consider the conversation context - reference previous topics if relevant
         - Focus on claims data analysis and risk management
         - If asking about capabilities, explain the claims data analysis features
         - Use clear formatting and structure
         - Reference Hirschbach's claims data when relevant
         - Emphasize data-driven insights from claims analysis
+        - If this appears to be a follow-up question, acknowledge the context
+        - Build upon previous conversation points when appropriate
+        - When asked about "last message" or "previous message", refer to the message BEFORE the current one in the conversation history
+        
+        Context-aware response examples:
+        - If user previously asked about claims and now asks "what else can you do?", mention additional claims analysis capabilities
+        - If conversation has been about risk management, tailor explanations to that context
+        - Reference specific topics mentioned earlier in the conversation
         
         Response:
         """

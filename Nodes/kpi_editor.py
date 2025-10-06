@@ -32,17 +32,34 @@ class KPIEditorNode:
             print("[KPI_EDITOR] No messages found")
             return self._set_error_state(state, "No messages found in state")
         
-        # Get user input from the first HumanMessage (proper LangGraph pattern)
+        # Get user input and conversation context from messages
         task = ""
+        conversation_context = []
+        human_messages = []
+        
+        # First, collect all messages and separate human messages
         for msg in messages:
             if hasattr(msg, 'content') and hasattr(msg, '__class__'):
                 if 'Human' in str(msg.__class__):
-                    task = msg.content
-                    break
+                    human_messages.append(msg.content)
+                elif 'AI' in str(msg.__class__):
+                    # Include brief AI context
+                    ai_content = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
+                    conversation_context.append(f"Previous response: {ai_content}")
+        
+        # Current task is the LAST (most recent) human message
+        if human_messages:
+            task = human_messages[-1]  # Last human message is current task
+            # Previous human messages are context
+            for prev_msg in human_messages[:-1]:
+                conversation_context.append(f"Previous query: {prev_msg}")
         
         if not task:
             # Fallback: use the last message
             task = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
+        
+        # Build context string for better KPI editing
+        context_text = "\n".join(conversation_context[-4:]) if conversation_context else ""  # Last 4 exchanges
         
         print(f" [KPI_EDITOR] Extracted task: '{task}'")
         
@@ -76,8 +93,8 @@ class KPIEditorNode:
             # Step 4: Map user intent to exact values (only for relevant columns)
             mapped_values = self._map_user_intent_to_values_step2(task, columns_needing_mapping, entity_mapping_data)
             
-            # Step 5: Generate final SQL
-            prompt = self._create_sql_generation_prompt_step3(task, kpi_metric, kpi_description, original_sql, metadata_results, mapped_values)
+            # Step 5: Generate final SQL with conversation context
+            prompt = self._create_sql_generation_prompt_step3(task, kpi_metric, kpi_description, original_sql, metadata_results, mapped_values, context_text)
             
             response = self.llm.invoke(prompt)
             edited_sql = response.content.strip()
@@ -391,7 +408,7 @@ class KPIEditorNode:
             print(f" [KPI_EDITOR] Error mapping user intent to values: {str(e)}")
             return {}
     
-    def _create_sql_generation_prompt_step3(self, task: str, kpi_metric: str, kpi_description: str, original_sql: str, metadata_results: List[Dict[str, Any]], mapped_values: Dict[str, Any]) -> str:
+    def _create_sql_generation_prompt_step3(self, task: str, kpi_metric: str, kpi_description: str, original_sql: str, metadata_results: List[Dict[str, Any]], mapped_values: Dict[str, Any], context_text: str = "") -> str:
         """Step 3: Create focused SQL generation prompt"""
         
         # Format mapped values with logic types
@@ -433,7 +450,16 @@ class KPIEditorNode:
             metadata_text = "No metadata available"
         
         return f"""
+        CONVERSATION CONTEXT:
+        {context_text if context_text else "No previous conversation context."}
+        
         TASK: Modify the original SQL query to match the user request: "{task}"
+        
+        IMPORTANT: Consider the conversation context when making modifications. Look for:
+        - References to previous queries or results
+        - Follow-up questions that build on earlier requests
+        - Implied filters or conditions based on conversation history
+        
         CRITICAL: Answer with ONLY the SQL query. No explanations, no markdown, no code blocks, no additional text.
         Just the pure SQL statement.
         Original KPI: {kpi_metric}

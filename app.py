@@ -18,19 +18,44 @@ logging.getLogger("azure").setLevel(logging.WARNING)
 logging.getLogger("azure.core").setLevel(logging.WARNING)
 logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
 
-# Simple create-and-run approach - no caching, no complexity
-def create_and_run_graph(user_input):
-    """Create graph and run it directly - fast and simple"""
+# Context-aware approach with graph caching and full message history
+@st.cache_resource
+def get_persistent_graph():
+    """Create and cache the graph instance for context preservation"""
     from Graph_Flow.main_graph import create_main_graph
+    return create_main_graph()
+
+def create_and_run_graph(user_input):
+    """Create graph and run it with full conversation context"""
     
-    # Create graph fresh each time
-    graph = create_main_graph()
+    # Use cached graph instance instead of creating fresh
+    graph = get_persistent_graph()
     
-    # Run it immediately
-    config = {"configurable": {"thread_id": "user_session"}}
+    # Build full conversation history from Streamlit session
+    full_messages = []
+    
+    # Convert Streamlit session messages to LangChain messages
+    # Note: The current user message is already added to st.session_state.messages before this function is called
+    for msg in st.session_state.messages:
+        if msg["role"] == "user":
+            full_messages.append(HumanMessage(content=msg["content"]))
+        else:
+            full_messages.append(AIMessage(content=msg["content"]))
+    
+    print(f"[CONTEXT] Passing {len(full_messages)} messages to graph")
+    for i, msg in enumerate(full_messages):
+        msg_type = "User" if isinstance(msg, HumanMessage) else "AI"
+        content_preview = msg.content[:30] + "..." if len(msg.content) > 30 else msg.content
+        print(f"[CONTEXT] Message {i+1}: {msg_type}: {content_preview}")
+    
+    # Use unique thread ID for each conversation to avoid state accumulation
+    import time
+    thread_id = f"conversation_{int(time.time())}"
+    config = {"configurable": {"thread_id": thread_id}}
+    
     inputs = {
-        "messages": [HumanMessage(content=user_input)],
-        "user_query": user_input  # Store the original user query
+        "messages": full_messages,  # Pass complete conversation history
+        "user_query": user_input
     }
     
     return graph.invoke(inputs, config)
@@ -136,26 +161,31 @@ def main():
     # Instructions - Fixed at top
     with st.expander("ℹ️ How to use this platform", expanded=False):
         st.markdown("""
-        **Hirschbach AI Risk Intelligence Platform using LangGraph orchestration:**
+        **Hirschbach AI Risk Intelligence Platform with Context-Aware Conversations:**
         
         1. **Ask Questions**: Type your questions about risk intelligence in natural language
-        2. **AI Processing**: LangGraph automatically routes through:
-           - **Orchestrator**: Determines if you need existing KPI or new SQL generation
-           - **KPI Editor**: Modifies existing KPIs to match your request
-           - **SQL Generation**: Creates new SQL queries from scratch
+        2. **Context Awareness**: The system remembers your conversation and builds on previous exchanges
+        3. **AI Processing**: LangGraph automatically routes through:
+           - **Orchestrator**: Determines if you need existing KPI or new SQL generation (context-aware)
+           - **KPI Editor**: Modifies existing KPIs to match your request (considers conversation history)
+           - **SQL Generation**: Creates new SQL queries from scratch (uses conversation context)
            - **Azure Retrieval**: Executes SQL and retrieves data from your database
            - **Insight Generation**: Analyzes data and provides recommendations
-        3. **Get Results**: See data tables, SQL queries, and AI-generated insights
-        4. **Full Workflow**: Input → Orchestrator → (KPI Editor OR SQL Generation) → Azure Retrieval → Insight Generation → Output
+        4. **Get Results**: See data tables, SQL queries, and AI-generated insights
+        5. **Follow-up Questions**: Ask follow-up questions like "What about Texas?" or "Show me more details"
         
-        **Features:**
+        **Enhanced Features:**
+        - ✅ **Context Preservation**: Remembers conversation history like ChatGPT/Claude
+        - ✅ **Smart Follow-ups**: Understands references to previous queries
         - ✅ **Smart Routing**: Automatically chooses between KPI editing and SQL generation
         - ✅ **Real-time Data**: Direct connection to your Azure SQL database
         - ✅ **AI Insights**: Automated analysis and recommendations
         - ✅ **Query Transparency**: See exactly what SQL was executed
         - ✅ **Performance Tracking**: Monitor execution times and row counts
         
-        **This version uses LangGraph's built-in orchestration for optimal performance!**
+        **Try conversational queries like:**
+        - "Show me claims data for California" → "What about Texas?" → "Filter by last month"
+        - "Which drivers have high risk?" → "Show me more details" → "What are the recommendations?"
         """)
     
     # Sidebar
@@ -183,7 +213,12 @@ def main():
         
         # System status
         st.success("✅ System ready")
-        st.info("🚀 Fast create-and-run approach")
+        st.info("🧠 Context-aware conversations enabled")
+        
+        # Show conversation context info
+        if st.session_state.messages:
+            message_count = len(st.session_state.messages)
+            st.info(f"💬 {message_count} messages in conversation history")
         
         # Show current workflow status
         if hasattr(st.session_state, 'last_result') and st.session_state.last_result:

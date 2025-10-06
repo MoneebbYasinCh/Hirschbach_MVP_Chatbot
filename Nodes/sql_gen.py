@@ -54,17 +54,34 @@ class SQLGenerationNode:
             state["sql_generation_error"] = "No messages found in state"
             return state
 
-        # Get user input from the first HumanMessage (proper LangGraph pattern)
+        # Get user input from the LAST HumanMessage (most recent query)
         user_query = ""
+        conversation_context = []
+        human_messages = []
+        
+        # First, collect all messages and separate human messages
         for msg in messages:
             if hasattr(msg, 'content') and hasattr(msg, '__class__'):
                 if 'Human' in str(msg.__class__):
-                    user_query = msg.content
-                    break
+                    human_messages.append(msg.content)
+                elif 'AI' in str(msg.__class__):
+                    # Include relevant AI responses for context
+                    ai_content = msg.content[:100] + "..." if len(msg.content) > 100 else msg.content
+                    conversation_context.append(f"Previous response: {ai_content}")
+        
+        # Current query is the LAST (most recent) human message
+        if human_messages:
+            user_query = human_messages[-1]  # Last human message is current query
+            # Previous human messages are context
+            for prev_msg in human_messages[:-1]:
+                conversation_context.append(f"Previous query: {prev_msg}")
 
         if not user_query:
             # Fallback: use the last message
             user_query = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
+        
+        # Build context string for better SQL generation
+        context_text = "\n".join(conversation_context[-6:]) if conversation_context else ""  # Last 6 exchanges
 
         if not user_query:
             self.logger.node_error("No user query found in state")
@@ -96,8 +113,8 @@ class SQLGenerationNode:
             # Step 3: Map user intent to exact values
             mapped_values = self._map_user_intent_to_values(user_query, needed_columns, entity_mapping_data)
             
-            # Step 4: Generate final SQL with exact values
-            final_sql = self._generate_final_sql(user_query, needed_columns, metadata_results, mapped_values)
+            # Step 4: Generate final SQL with exact values and conversation context
+            final_sql = self._generate_final_sql(user_query, needed_columns, metadata_results, mapped_values, context_text)
             
             # Update state
             state["sql_generation_status"] = "completed"
@@ -339,7 +356,7 @@ class SQLGenerationNode:
             self.logger.node_warning(f"Error mapping user intent to values: {str(e)}")
             return {}
     
-    def _generate_final_sql(self, user_query: str, needed_columns: List[str], metadata_results: List[Dict], mapped_values: Dict[str, str]) -> str:
+    def _generate_final_sql(self, user_query: str, needed_columns: List[str], metadata_results: List[Dict], mapped_values: Dict[str, str], context_text: str = "") -> str:
         """Generate final SQL with exact values (like KPI editor)"""
         
         # Format metadata for prompt - ONLY use needed columns
@@ -378,8 +395,17 @@ You are an expert SQL query generator specializing in SQL Server syntax. Your ta
 - Do NOT substitute similar-sounding column names
 - Use the EXACT column names provided - no substitutions or variations
 
+## CONVERSATION CONTEXT
+{context_text if context_text else "No previous conversation context available."}
+
 ## Your Mission
 Analyze the user's request step-by-step and generate a SQL query that accurately fulfills their requirements while adhering to all formatting, filtering, and structural rules defined below.
+
+IMPORTANT: Consider the conversation context when interpreting the user's request. Look for:
+- References to previous queries or results
+- Follow-up questions that build on earlier requests
+- Implied filters or conditions based on conversation history
+- Context clues that help clarify ambiguous requests
 
 ---
 
@@ -387,8 +413,10 @@ Analyze the user's request step-by-step and generate a SQL query that accurately
 
 ### Step 1: Understand the User Request
 - Parse the **USER REQUEST**: "{user_query}"
+- Consider the **CONVERSATION CONTEXT** above for additional clarity
 - Identify what data the user wants to retrieve
 - Determine any filtering conditions, aggregations, or groupings needed
+- Look for context-dependent references (e.g., "that data", "those results", "also show")
 
         ### Step 2: Review Available Schema
         - **AVAILABLE COLUMNS**: {metadata_text}
