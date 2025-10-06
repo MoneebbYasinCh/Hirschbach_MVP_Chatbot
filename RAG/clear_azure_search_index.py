@@ -39,11 +39,11 @@ def clear_azure_search_index(index_name: str):
         # Check if index exists
         existing_indexes = [idx.name for idx in index_client.list_indexes()]
         if index_name not in existing_indexes:
-            print(f"❌ Index '{index_name}' does not exist")
+            print(f" Index '{index_name}' does not exist")
             return
         
         # Get all documents to delete them
-        print(f"🔍 Retrieving all documents from index: {index_name}")
+        print(f" Retrieving all documents from index: {index_name}")
         
         # Search for all documents (using a wildcard search)
         results = search_client.search(search_text="*", select=["id"], top=10000)
@@ -51,10 +51,10 @@ def clear_azure_search_index(index_name: str):
         document_ids = [result["id"] for result in results]
         
         if not document_ids:
-            print(f"📊 Index '{index_name}' is already empty")
+            print(f" Index '{index_name}' is already empty")
             return
         
-        print(f"🗑️  Found {len(document_ids)} documents to delete")
+        print(f" Found {len(document_ids)} documents to delete")
         
         # Delete documents in batches
         batch_size = 1000
@@ -70,17 +70,17 @@ def clear_azure_search_index(index_name: str):
                 # Delete batch using the new syntax
                 result = search_client.delete_documents(documents=delete_docs)
                 deleted_count += len(batch_ids)
-                print(f"✅ Deleted batch {i//batch_size + 1}/{(len(document_ids) + batch_size - 1)//batch_size}")
+                print(f" Deleted batch {i//batch_size + 1}/{(len(document_ids) + batch_size - 1)//batch_size}")
                 
             except Exception as e:
-                print(f"❌ Error deleting batch {i//batch_size + 1}: {e}")
+                print(f" Error deleting batch {i//batch_size + 1}: {e}")
                 continue
         
-        print(f"✅ Successfully cleared {deleted_count} documents from index: {index_name}")
-        print(f"📊 Index '{index_name}' is now empty but still exists")
+        print(f" Successfully cleared {deleted_count} documents from index: {index_name}")
+        print(f" Index '{index_name}' is now empty but still exists")
         
     except Exception as e:
-        print(f"❌ Error clearing index '{index_name}': {e}")
+        print(f" Error clearing index '{index_name}': {e}")
         raise
 
 def list_azure_search_indexes():
@@ -104,35 +104,35 @@ def list_azure_search_indexes():
     
     try:
         indexes = list(index_client.list_indexes())
-        print("📋 Available Azure AI Search indexes:")
+        print(" Available Azure AI Search indexes:")
         for idx in indexes:
             print(f"  - {idx.name}")
         return [idx.name for idx in indexes]
     except Exception as e:
-        print(f"❌ Error listing indexes: {e}")
+        print(f" Error listing indexes: {e}")
         return []
 
 def main():
     """Main function to clear a specific index"""
-    print("🔍 Available indexes:")
+    print(" Available indexes:")
     available_indexes = list_azure_search_indexes()
     
     if not available_indexes:
-        print("❌ No indexes found or error occurred")
+        print(" No indexes found or error occurred")
         return
     
     print("\nEnter the Azure AI Search index name to clear:")
     index_name = input("Index name: ").strip()
     
     if not index_name:
-        print("❌ No index name provided")
+        print(" No index name provided")
         return
     
     if index_name not in available_indexes:
-        print(f"❌ Index '{index_name}' not found in available indexes")
+        print(f" Index '{index_name}' not found in available indexes")
         return
     
-    print(f"🗑️  Clearing index: {index_name}")
+    print(f" Clearing index: {index_name}")
     clear_azure_search_index(index_name)
 
 if __name__ == "__main__":

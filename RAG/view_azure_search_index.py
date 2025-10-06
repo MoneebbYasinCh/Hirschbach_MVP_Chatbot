@@ -35,7 +35,7 @@ class AzureSearchIndexViewer:
             return [index.name for index in indexes]
 
         except Exception as e:
-            print(f"❌ Error retrieving index names: {str(e)}")
+            print(f" Error retrieving index names: {str(e)}")
             return []
 
     def view_index_contents(self, index_name: str, top_k: int = 10):
@@ -47,7 +47,7 @@ class AzureSearchIndexViewer:
                 credential=self.credential
             )
 
-            print(f"\n🔍 [INDEX VIEWER] Viewing contents of index: '{index_name}'")
+            print(f"\n [INDEX VIEWER] Viewing contents of index: '{index_name}'")
             print("=" * 60)
 
             # Get all documents from the index
@@ -59,18 +59,18 @@ class AzureSearchIndexViewer:
 
             # Print results count
             total_count = results.get_count()
-            print(f"📊 Total documents in index: {total_count}")
+            print(f" Total documents in index: {total_count}")
 
             if total_count == 0:
-                print("⚠️  Index is empty")
+                print(" Index is empty")
                 return
 
-            print(f"\n📋 Showing first {min(top_k, total_count)} documents:")
+            print(f"\n Showing first {min(top_k, total_count)} documents:")
             print("-" * 60)
 
             # Print each document
             for i, result in enumerate(results, 1):
-                print(f"\n📄 Document #{i}:")
+                print(f"\n Document #{i}:")
                 print(f"   ID: {result.get('id', 'N/A')}")
 
                 # Print all fields except vectors
@@ -93,43 +93,43 @@ class AzureSearchIndexViewer:
             print("\n" + "=" * 60)
 
         except Exception as e:
-            print(f"❌ Error viewing index '{index_name}': {str(e)}")
+            print(f" Error viewing index '{index_name}': {str(e)}")
 
     def interactive_mode(self):
         """Interactive mode to let user select index and view contents"""
-        print("🔍 Azure Search Index Viewer")
+        print(" Azure Search Index Viewer")
         print("=" * 50)
 
         # Get available indexes
         available_indexes = self.get_index_names()
 
         if not available_indexes:
-            print("❌ No indexes found in Azure Search service")
+            print(" No indexes found in Azure Search service")
             return
 
-        print(f"\n📋 Available indexes ({len(available_indexes)}):")
+        print(f"\n Available indexes ({len(available_indexes)}):")
         for i, index_name in enumerate(available_indexes, 1):
             print(f"   {i}. {index_name}")
 
-        print("\n📝 Enter the name of the index you want to view (or 'q' to quit):")
+        print("\n Enter the name of the index you want to view (or 'q' to quit):")
 
         while True:
             index_name = input("\nIndex name: ").strip()
 
             if index_name.lower() == 'q':
-                print("👋 Goodbye!")
+                print(" Goodbye!")
                 break
 
             if index_name in available_indexes:
                 self.view_index_contents(index_name)
             else:
-                print(f"❌ Index '{index_name}' not found.")
+                print(f" Index '{index_name}' not found.")
                 print(f"Available indexes: {', '.join(available_indexes)}")
 
     def direct_mode(self, index_name: str, top_k: int = 10):
         """Direct mode to view specific index without interaction"""
         if not index_name:
-            print("❌ Index name is required")
+            print(" Index name is required")
             return
 
         self.view_index_contents(index_name, top_k)

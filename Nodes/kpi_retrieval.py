@@ -116,9 +116,9 @@ class KPIRetrievalNode:
         
         if kpi_results:
             selected_kpi = kpi_results[0]
-            print(f"📊 [KPI RETRIEVAL] Selected KPI: {selected_kpi.get('metric_name', 'Unknown')}")
-            print(f"📝 [KPI RETRIEVAL] Description: {selected_kpi.get('description', 'No description')}")
-            print(f"🔍 [KPI RETRIEVAL] SQL Query: {selected_kpi.get('sql_query', 'No SQL')[:100]}...")
+            print(f" [KPI RETRIEVAL] Selected KPI: {selected_kpi.get('metric_name', 'Unknown')}")
+            print(f" [KPI RETRIEVAL] Description: {selected_kpi.get('description', 'No description')}")
+            print(f" [KPI RETRIEVAL] SQL Query: {selected_kpi.get('sql_query', 'No SQL')[:100]}...")
             
             state["top_kpi"] = {
                 "metric_name": selected_kpi.get('metric_name', ''),

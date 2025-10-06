@@ -20,7 +20,7 @@ from Nodes.kpi_editor import KPIEditorNode
 
 def test_environment_setup():
     """Test if environment variables are properly set"""
-    print("🔧 [TEST] Checking environment setup...")
+    print(" [TEST] Checking environment setup...")
     
     required_vars = [
         "AZURE_OPENAI_ENDPOINT",
@@ -35,22 +35,22 @@ def test_environment_setup():
             missing_vars.append(var)
     
     if missing_vars:
-        print(f"❌ [TEST] Missing environment variables: {missing_vars}")
+        print(f" [TEST] Missing environment variables: {missing_vars}")
         return False
     else:
-        print("✅ [TEST] All environment variables are set")
+        print(" [TEST] All environment variables are set")
         return True
 
 def test_node_initialization():
     """Test if the KPI editor node initializes properly"""
-    print("\n🔧 [TEST] Testing node initialization...")
+    print("\n [TEST] Testing node initialization...")
     
     try:
         node = KPIEditorNode()
-        print("✅ [TEST] KPI Editor node initialized successfully")
+        print(" [TEST] KPI Editor node initialized successfully")
         return True
     except Exception as e:
-        print(f"❌ [TEST] Failed to initialize KPI Editor node: {str(e)}")
+        print(f" [TEST] Failed to initialize KPI Editor node: {str(e)}")
         return False
 
 def create_test_state_with_kpi():
@@ -146,7 +146,7 @@ def create_test_state_without_messages():
 
 def test_kpi_editor_with_valid_data():
     """Test KPI editor with valid KPI and metadata"""
-    print("\n🔧 [TEST] Testing KPI editor with valid data...")
+    print("\n [TEST] Testing KPI editor with valid data...")
     
     try:
         node = KPIEditorNode()
@@ -162,21 +162,21 @@ def test_kpi_editor_with_valid_data():
         assert "kpi_editor_result" in result_state, "kpi_editor_result should be set"
         
         if result_state["kpi_editor_status"] == "completed":
-            print("✅ [TEST] KPI editor completed successfully")
+            print(" [TEST] KPI editor completed successfully")
             print(f"[TEST] Edited SQL: {result_state['top_kpi']['sql_query']}")
             print(f"[TEST] Modifications: {result_state['kpi_editor_result'].get('modifications_made', [])}")
             return True
         else:
-            print(f"❌ [TEST] KPI editor failed: {result_state.get('kpi_editor_error', 'Unknown error')}")
+            print(f" [TEST] KPI editor failed: {result_state.get('kpi_editor_error', 'Unknown error')}")
             return False
             
     except Exception as e:
-        print(f"❌ [TEST] Error during KPI editor test: {str(e)}")
+        print(f" [TEST] Error during KPI editor test: {str(e)}")
         return False
 
 def test_kpi_editor_without_kpi():
     """Test KPI editor without KPI data"""
-    print("\n🔧 [TEST] Testing KPI editor without KPI data...")
+    print("\n [TEST] Testing KPI editor without KPI data...")
     
     try:
         node = KPIEditorNode()
@@ -188,16 +188,16 @@ def test_kpi_editor_without_kpi():
         assert result_state["kpi_editor_status"] == "error", "Should set error status for missing KPI"
         assert "kpi_editor_error" in result_state, "Should set error message"
         
-        print("✅ [TEST] KPI editor handled missing KPI data correctly")
+        print(" [TEST] KPI editor handled missing KPI data correctly")
         return True
         
     except Exception as e:
-        print(f"❌ [TEST] Error during missing KPI test: {str(e)}")
+        print(f" [TEST] Error during missing KPI test: {str(e)}")
         return False
 
 def test_kpi_editor_without_messages():
     """Test KPI editor without messages"""
-    print("\n🔧 [TEST] Testing KPI editor without messages...")
+    print("\n [TEST] Testing KPI editor without messages...")
     
     try:
         node = KPIEditorNode()
@@ -209,16 +209,16 @@ def test_kpi_editor_without_messages():
         assert result_state["kpi_editor_status"] == "error", "Should set error status for missing messages"
         assert "kpi_editor_error" in result_state, "Should set error message"
         
-        print("✅ [TEST] KPI editor handled missing messages correctly")
+        print(" [TEST] KPI editor handled missing messages correctly")
         return True
         
     except Exception as e:
-        print(f"❌ [TEST] Error during missing messages test: {str(e)}")
+        print(f" [TEST] Error during missing messages test: {str(e)}")
         return False
 
 def test_metadata_formatting():
     """Test the metadata formatting helper method"""
-    print("\n🔧 [TEST] Testing metadata formatting...")
+    print("\n [TEST] Testing metadata formatting...")
     
     try:
         node = KPIEditorNode()
@@ -244,17 +244,17 @@ def test_metadata_formatting():
         assert "Code indicating type of accident or incident" in formatted, "Should include description"
         assert "0.92" in formatted, "Should include score"
         
-        print("✅ [TEST] Metadata formatting works correctly")
+        print(" [TEST] Metadata formatting works correctly")
         print(f"[TEST] Formatted metadata preview:\n{formatted[:200]}...")
         return True
         
     except Exception as e:
-        print(f"❌ [TEST] Error during metadata formatting test: {str(e)}")
+        print(f" [TEST] Error during metadata formatting test: {str(e)}")
         return False
 
 def test_entity_mapping_data():
     """Test entity mapping data functionality"""
-    print("\n🔧 [TEST] Testing entity mapping data...")
+    print("\n [TEST] Testing entity mapping data...")
     
     try:
         node = KPIEditorNode()
@@ -289,12 +289,12 @@ def test_entity_mapping_data():
         assert "Cargo Claim Flag:" in result, "Should include Cargo Claim Flag values"
         assert "other_column" not in result, "Should not include irrelevant columns"
         
-        print("✅ [TEST] Entity mapping data works correctly")
+        print(" [TEST] Entity mapping data works correctly")
         print(f"[TEST] Entity mapping result: {result[:200]}...")
         return True
         
     except Exception as e:
-        print(f"❌ [TEST] Error during entity mapping test: {str(e)}")
+        print(f" [TEST] Error during entity mapping test: {str(e)}")
         return False
 
 def create_test_state_for_current_month_filter():
@@ -353,7 +353,7 @@ def create_test_state_for_current_month_filter():
 
 def test_kpi_editor_current_month_filter():
     """Test KPI editor adding current month filter to original KPI"""
-    print("\n🔧 [TEST] Testing KPI editor with current month filter...")
+    print("\n [TEST] Testing KPI editor with current month filter...")
     
     try:
         node = KPIEditorNode()
@@ -371,7 +371,7 @@ def test_kpi_editor_current_month_filter():
         
         if result_state["kpi_editor_status"] == "completed":
             edited_sql = result_state['top_kpi']['sql_query']
-            print("✅ [TEST] KPI editor completed successfully")
+            print(" [TEST] KPI editor completed successfully")
             print(f"[TEST] Edited SQL: {edited_sql}")
             print(f"[TEST] Modifications: {result_state['kpi_editor_result'].get('modifications_made', [])}")
             
@@ -381,22 +381,22 @@ def test_kpi_editor_current_month_filter():
             has_where_clause = 'where' in sql_lower
             
             if has_date_filter or has_where_clause:
-                print("✅ [TEST] Current month filter was successfully added!")
+                print(" [TEST] Current month filter was successfully added!")
                 return True
             else:
-                print("⚠️ [TEST] No date filter detected in the edited SQL")
+                print(" [TEST] No date filter detected in the edited SQL")
                 return True  # Still consider it a pass since the LLM might have used different syntax
         else:
-            print(f"❌ [TEST] KPI editor failed: {result_state.get('kpi_editor_error', 'Unknown error')}")
+            print(f" [TEST] KPI editor failed: {result_state.get('kpi_editor_error', 'Unknown error')}")
             return False
             
     except Exception as e:
-        print(f"❌ [TEST] Error during current month filter test: {str(e)}")
+        print(f" [TEST] Error during current month filter test: {str(e)}")
         return False
 
 def run_all_tests():
     """Run all tests and report results"""
-    print("🚀 [TEST] Starting KPI Editor Node Tests")
+    print(" [TEST] Starting KPI Editor Node Tests")
     print("=" * 50)
     
     tests = [
@@ -414,28 +414,28 @@ def run_all_tests():
     total = len(tests)
     
     for test_name, test_func in tests:
-        print(f"\n📋 [TEST] Running: {test_name}")
+        print(f"\n [TEST] Running: {test_name}")
         try:
             if test_func():
                 passed += 1
             else:
-                print(f"❌ [TEST] {test_name} failed")
+                print(f" [TEST] {test_name} failed")
         except Exception as e:
-            print(f"❌ [TEST] {test_name} failed with exception: {str(e)}")
+            print(f" [TEST] {test_name} failed with exception: {str(e)}")
     
     print("\n" + "=" * 50)
-    print(f"📊 [TEST] Results: {passed}/{total} tests passed")
+    print(f" [TEST] Results: {passed}/{total} tests passed")
     
     if passed == total:
-        print("🎉 [TEST] All tests passed! KPI Editor node is working correctly.")
+        print(" [TEST] All tests passed! KPI Editor node is working correctly.")
     else:
-        print(f"⚠️ [TEST] {total - passed} tests failed. Please check the implementation.")
+        print(f" [TEST] {total - passed} tests failed. Please check the implementation.")
     
     return passed == total
 
 def interactive_kpi_test():
     """Interactive KPI editor test where user can input prompts"""
-    print("🎮 INTERACTIVE KPI EDITOR TEST")
+    print(" INTERACTIVE KPI EDITOR TEST")
     print("=" * 60)
     print("Enter your queries below. Type 'quit', 'exit', or 'q' to stop.")
     print("Type 'test' to run automated tests instead.")
@@ -443,16 +443,16 @@ def interactive_kpi_test():
     
     # Check environment first
     if not test_environment_setup():
-        print("❌ Environment setup failed. Please fix missing variables and try again.")
+        print(" Environment setup failed. Please fix missing variables and try again.")
         return
     
     # Initialize the node
     try:
-        print("\n📡 Initializing KPI Editor Node...")
+        print("\n Initializing KPI Editor Node...")
         node = KPIEditorNode()
-        print("✅ KPI Editor Node initialized successfully!")
+        print(" KPI Editor Node initialized successfully!")
     except Exception as e:
-        print(f"❌ Failed to initialize KPI Editor Node: {str(e)}")
+        print(f" Failed to initialize KPI Editor Node: {str(e)}")
         return
     
     # Create sample KPI and metadata for testing
@@ -503,9 +503,9 @@ def interactive_kpi_test():
         }
     ]
     
-    print(f"\n📊 Sample KPI: {sample_kpi['metric_name']}")
-    print(f"📝 Original SQL: {sample_kpi['sql_query'][:100]}...")
-    print(f"\n📊 Available columns: {len(sample_metadata)}")
+    print(f"\n Sample KPI: {sample_kpi['metric_name']}")
+    print(f" Original SQL: {sample_kpi['sql_query'][:100]}...")
+    print(f"\n Available columns: {len(sample_metadata)}")
     for col in sample_metadata:
         print(f"  - {col['column_name']} ({col['data_type']}): {col['description']}")
     
@@ -518,21 +518,21 @@ def interactive_kpi_test():
             
             # Check for exit commands
             if query.lower() in ['quit', 'exit', 'q']:
-                print("👋 Goodbye!")
+                print(" Goodbye!")
                 break
             
             # Check for test command
             if query.lower() == 'test':
-                print("\n🧪 Running automated tests...")
+                print("\n Running automated tests...")
                 success = run_all_tests()
-                print(f"\n📊 Test results: {'All passed!' if success else 'Some failed!'}")
+                print(f"\n Test results: {'All passed!' if success else 'Some failed!'}")
                 continue
             
             if not query:
-                print("⚠️ Please enter a valid query")
+                print(" Please enter a valid query")
                 continue
             
-            print(f"\n🔄 Processing: '{query}'")
+            print(f"\n Processing: '{query}'")
             print("-" * 40)
             
             # Create test state
@@ -553,52 +553,52 @@ def interactive_kpi_test():
             
             # Display results
             status = result_state.get("kpi_editor_status", "unknown")
-            print(f"📊 Status: {status}")
+            print(f" Status: {status}")
             
             if status == "completed":
                 edited_sql = result_state.get("top_kpi", {}).get("sql_query", "")
                 modifications = result_state.get("kpi_editor_result", {}).get("modifications_made", [])
                 
-                print(f"\n✅ KPI EDITING COMPLETED SUCCESSFULLY:")
-                print(f"📝 Original SQL:")
+                print(f"\n KPI EDITING COMPLETED SUCCESSFULLY:")
+                print(f" Original SQL:")
                 print("-" * 40)
                 print(sample_kpi['sql_query'])
                 print("-" * 40)
                 
-                print(f"📝 Edited SQL:")
+                print(f" Edited SQL:")
                 print("-" * 40)
                 print(edited_sql)
                 print("-" * 40)
                 
                 if modifications:
-                    print(f"🔧 Modifications made: {', '.join(modifications)}")
+                    print(f" Modifications made: {', '.join(modifications)}")
                 
                 # Show if SQL actually changed
                 if edited_sql != sample_kpi['sql_query']:
-                    print("✅ SQL was successfully modified!")
+                    print(" SQL was successfully modified!")
                 else:
-                    print("ℹ️ No changes were made to the SQL")
+                    print("ℹ No changes were made to the SQL")
                 
             else:
                 error_msg = result_state.get("kpi_editor_error", "Unknown error")
-                print(f"❌ KPI editing failed: {error_msg}")
+                print(f" KPI editing failed: {error_msg}")
                 
                 # Show partial results if available
                 edited_sql = result_state.get("top_kpi", {}).get("sql_query", "")
                 if edited_sql and edited_sql != sample_kpi['sql_query']:
-                    print(f"📝 Partial SQL generated:")
+                    print(f" Partial SQL generated:")
                     print("-" * 40)
                     print(edited_sql)
                     print("-" * 40)
             
         except KeyboardInterrupt:
-            print("\n👋 Goodbye!")
+            print("\n Goodbye!")
             break
         except EOFError:
-            print("\n👋 Goodbye!")
+            print("\n Goodbye!")
             break
         except Exception as e:
-            print(f"❌ Error processing query: {e}")
+            print(f" Error processing query: {e}")
             import traceback
             traceback.print_exc()
 
@@ -610,6 +610,6 @@ if __name__ == "__main__":
         interactive_kpi_test()
     else:
         # Default to interactive mode
-        print("🚀 Starting Interactive KPI Editor Test")
-        print("💡 Use '--test' flag for automated test mode")
+        print(" Starting Interactive KPI Editor Test")
+        print(" Use '--test' flag for automated test mode")
         interactive_kpi_test()

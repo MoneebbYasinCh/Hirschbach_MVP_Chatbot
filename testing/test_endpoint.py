@@ -31,9 +31,9 @@ def test_network_connectivity(endpoint):
         # Test DNS resolution
         try:
             ip_address = socket.gethostbyname(hostname)
-            print(f"✅ DNS resolved to: {ip_address}")
+            print(f" DNS resolved to: {ip_address}")
         except socket.gaierror as e:
-            print(f"❌ DNS resolution failed: {e}")
+            print(f" DNS resolution failed: {e}")
             return False
         
         # Test basic connectivity
@@ -45,36 +45,36 @@ def test_network_connectivity(endpoint):
             sock.close()
             
             if result == 0:
-                print("✅ Port 443 is reachable")
+                print(" Port 443 is reachable")
             else:
-                print(f"❌ Port 443 is not reachable (error code: {result})")
+                print(f" Port 443 is not reachable (error code: {result})")
                 return False
         except Exception as e:
-            print(f"❌ Connection test failed: {e}")
+            print(f" Connection test failed: {e}")
             return False
         
         # Test HTTPS connectivity
         print(f"Testing HTTPS connectivity...")
         try:
             response = requests.get(f"https://{hostname}", timeout=10, verify=True)
-            print(f"✅ HTTPS connection successful (status: {response.status_code})")
+            print(f" HTTPS connection successful (status: {response.status_code})")
         except requests.exceptions.SSLError as e:
-            print(f"❌ SSL/TLS error: {e}")
+            print(f" SSL/TLS error: {e}")
             return False
         except requests.exceptions.ConnectionError as e:
-            print(f"❌ Connection error: {e}")
+            print(f" Connection error: {e}")
             return False
         except requests.exceptions.Timeout as e:
-            print(f"❌ Timeout error: {e}")
+            print(f" Timeout error: {e}")
             return False
         except Exception as e:
-            print(f"❌ Unexpected error: {e}")
+            print(f" Unexpected error: {e}")
             return False
         
         return True
         
     except Exception as e:
-        print(f"❌ Network test failed: {e}")
+        print(f" Network test failed: {e}")
         return False
 
 def test_azure_specific_issues(endpoint, api_key):
@@ -99,22 +99,22 @@ def test_azure_specific_issues(endpoint, api_key):
             print(f"  Status: {response.status_code}")
             
             if response.status_code == 200:
-                print(f"  ✅ Endpoint accessible")
+                print(f" Endpoint accessible")
             elif response.status_code == 401:
-                print(f"  ⚠️  Unauthorized (API key issue)")
+                print(f" Unauthorized (API key issue)")
             elif response.status_code == 404:
-                print(f"  ❌ Not found (endpoint/resource issue)")
+                print(f" Not found (endpoint/resource issue)")
             elif response.status_code == 403:
-                print(f"  ❌ Forbidden (permission/region issue)")
+                print(f" Forbidden (permission/region issue)")
             else:
-                print(f"  ⚠️  Unexpected status: {response.status_code}")
+                print(f" Unexpected status: {response.status_code}")
                 
         except requests.exceptions.Timeout:
-            print(f"  ❌ Timeout - possible network/firewall issue")
+            print(f" Timeout - possible network/firewall issue")
         except requests.exceptions.ConnectionError:
-            print(f"  ❌ Connection error - possible network issue")
+            print(f" Connection error - possible network issue")
         except Exception as e:
-            print(f"  ❌ Error: {e}")
+            print(f" Error: {e}")
 
 def get_user_input():
     """Get endpoint and API key from user input"""
@@ -134,7 +134,7 @@ def test_endpoint_connectivity(endpoint, api_key):
     print(f"API Key: {api_key[:10]}..." if api_key else "NOT SET")
     
     if not endpoint or not api_key:
-        print("❌ Missing endpoint or API key")
+        print(" Missing endpoint or API key")
         return False
     
     # Test basic connectivity
@@ -146,23 +146,23 @@ def test_endpoint_connectivity(endpoint, api_key):
         print(f"Status Code: {response.status_code}")
         
         if response.status_code == 200:
-            print("✅ Endpoint is reachable")
+            print(" Endpoint is reachable")
             deployments = response.json()
             print(f"Available deployments: {[d.get('id') for d in deployments.get('data', [])]}")
             return True
         elif response.status_code == 401:
-            print("❌ Unauthorized - Check your API key")
+            print(" Unauthorized - Check your API key")
             return False
         elif response.status_code == 404:
-            print("❌ Not Found - Check your endpoint URL")
+            print(" Not Found - Check your endpoint URL")
             return False
         else:
-            print(f"❌ Unexpected status: {response.status_code}")
+            print(f" Unexpected status: {response.status_code}")
             print(f"Response: {response.text}")
             return False
             
     except requests.exceptions.RequestException as e:
-        print(f"❌ Connection error: {e}")
+        print(f" Connection error: {e}")
         return False
 
 def test_specific_deployment(endpoint, api_key):
@@ -189,27 +189,27 @@ def test_specific_deployment(endpoint, api_key):
             max_tokens=10
         )
         
-        print("✅ SUCCESS!")
+        print(" SUCCESS!")
         print(f"Response: {response.choices[0].message.content}")
         return True
         
     except Exception as e:
-        print(f"❌ ERROR: {e}")
+        print(f" ERROR: {e}")
         print(f"Error type: {type(e).__name__}")
         
         # Specific error analysis
         error_str = str(e)
         if "404" in error_str:
-            print("\n🔍 404 Analysis:")
+            print("\n 404 Analysis:")
             print("- The deployment name doesn't exist at this endpoint")
             print("- Check if you're using the right Azure OpenAI resource")
             print("- Verify the deployment name matches exactly (case-sensitive)")
         elif "401" in error_str:
-            print("\n🔍 401 Analysis:")
+            print("\n 401 Analysis:")
             print("- Invalid API key")
             print("- API key doesn't match the endpoint")
         elif "403" in error_str:
-            print("\n🔍 403 Analysis:")
+            print("\n 403 Analysis:")
             print("- API key doesn't have permission")
             print("- Check if the deployment is in the right region")
         
@@ -237,12 +237,12 @@ def test_embeddings(endpoint, api_key):
             input="test text"
         )
         
-        print("✅ Embeddings SUCCESS!")
+        print(" Embeddings SUCCESS!")
         print(f"Embedding dimensions: {len(response.data[0].embedding)}")
         return True
         
     except Exception as e:
-        print(f"❌ Embeddings ERROR: {e}")
+        print(f" Embeddings ERROR: {e}")
         return False
 
 def suggest_fixes():
@@ -291,7 +291,7 @@ def main():
             # Test embeddings
             test_embeddings(endpoint, api_key)
     else:
-        print("\n❌ Network connectivity issues detected. Check:")
+        print("\n Network connectivity issues detected. Check:")
         print("- Internet connection")
         print("- Corporate firewall/proxy settings")
         print("- DNS resolution")

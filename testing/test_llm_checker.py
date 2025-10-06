@@ -20,7 +20,7 @@ from Nodes.llm_checker import LLMCheckerNode
 
 def test_environment_setup():
     """Test if environment variables are properly set"""
-    print("🔧 [TEST] Checking environment setup...")
+    print(" [TEST] Checking environment setup...")
     
     required_vars = [
         "AZURE_OPENAI_ENDPOINT",
@@ -35,22 +35,22 @@ def test_environment_setup():
             missing_vars.append(var)
     
     if missing_vars:
-        print(f"❌ [TEST] Missing environment variables: {missing_vars}")
+        print(f" [TEST] Missing environment variables: {missing_vars}")
         return False
     else:
-        print("✅ [TEST] All environment variables are set")
+        print(" [TEST] All environment variables are set")
         return True
 
 def test_node_initialization():
     """Test if the LLM checker node initializes properly"""
-    print("\n🔧 [TEST] Testing node initialization...")
+    print("\n [TEST] Testing node initialization...")
     
     try:
         node = LLMCheckerNode()
-        print("✅ [TEST] LLM Checker node initialized successfully")
+        print(" [TEST] LLM Checker node initialized successfully")
         return True
     except Exception as e:
-        print(f"❌ [TEST] Failed to initialize node: {e}")
+        print(f" [TEST] Failed to initialize node: {e}")
         return False
 
 def create_test_state(task: str, kpi_data: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -74,7 +74,7 @@ def create_test_state(task: str, kpi_data: Dict[str, Any] = None) -> Dict[str, A
 
 def test_perfect_match_scenario():
     """Test perfect match scenario"""
-    print("\n🔧 [TEST] Testing PERFECT_MATCH scenario...")
+    print("\n [TEST] Testing PERFECT_MATCH scenario...")
     
     task = "show me closed claims by state"
     kpi_data = {
@@ -91,26 +91,26 @@ def test_perfect_match_scenario():
         node = LLMCheckerNode()
         result = node(state)
         
-        print(f"📊 [RESULT] Decision: {result['llm_check_result']['decision_type']}")
-        print(f"📊 [RESULT] Next Node: {result['next_node']}")
-        print(f"📊 [RESULT] Reasoning: {result['llm_check_result']['reasoning']}")
-        print(f"📊 [RESULT] Confidence: {result['llm_check_result']['confidence']}")
+        print(f" [RESULT] Decision: {result['llm_check_result']['decision_type']}")
+        print(f" [RESULT] Next Node: {result['next_node']}")
+        print(f" [RESULT] Reasoning: {result['llm_check_result']['reasoning']}")
+        print(f" [RESULT] Confidence: {result['llm_check_result']['confidence']}")
         
         expected_node = "azure_retrieval"  # Fixed: should be azure_retrieval not aws_retrieval
         if result['next_node'] == expected_node:
-            print(f"✅ [TEST] Correctly routed to {expected_node}")
+            print(f" [TEST] Correctly routed to {expected_node}")
             return True
         else:
-            print(f"❌ [TEST] Expected {expected_node}, got {result['next_node']}")
+            print(f" [TEST] Expected {expected_node}, got {result['next_node']}")
             return False
             
     except Exception as e:
-        print(f"❌ [TEST] Error in perfect match test: {e}")
+        print(f" [TEST] Error in perfect match test: {e}")
         return False
 
 def test_needs_edit_scenario():
     """Test needs minor edit scenario"""
-    print("\n🔧 [TEST] Testing NEEDS_MINOR_EDIT scenario...")
+    print("\n [TEST] Testing NEEDS_MINOR_EDIT scenario...")
     
     task = "show me closed claims this year by state"
     kpi_data = {
@@ -127,26 +127,26 @@ def test_needs_edit_scenario():
         node = LLMCheckerNode()
         result = node(state)
         
-        print(f"📊 [RESULT] Decision: {result['llm_check_result']['decision_type']}")
-        print(f"📊 [RESULT] Next Node: {result['next_node']}")
-        print(f"📊 [RESULT] Reasoning: {result['llm_check_result']['reasoning']}")
-        print(f"📊 [RESULT] Confidence: {result['llm_check_result']['confidence']}")
+        print(f" [RESULT] Decision: {result['llm_check_result']['decision_type']}")
+        print(f" [RESULT] Next Node: {result['next_node']}")
+        print(f" [RESULT] Reasoning: {result['llm_check_result']['reasoning']}")
+        print(f" [RESULT] Confidence: {result['llm_check_result']['confidence']}")
         
         expected_node = "kpi_editor"
         if result['next_node'] == expected_node:
-            print(f"✅ [TEST] Correctly routed to {expected_node}")
+            print(f" [TEST] Correctly routed to {expected_node}")
             return True
         else:
-            print(f"❌ [TEST] Expected {expected_node}, got {result['next_node']}")
+            print(f" [TEST] Expected {expected_node}, got {result['next_node']}")
             return False
             
     except Exception as e:
-        print(f"❌ [TEST] Error in needs edit test: {e}")
+        print(f" [TEST] Error in needs edit test: {e}")
         return False
 
 def test_not_relevant_scenario():
     """Test not relevant scenario"""
-    print("\n🔧 [TEST] Testing NOT_RELEVANT scenario...")
+    print("\n [TEST] Testing NOT_RELEVANT scenario...")
     
     task = "show me patient demographics"
     kpi_data = {
@@ -163,26 +163,26 @@ def test_not_relevant_scenario():
         node = LLMCheckerNode()
         result = node(state)
         
-        print(f"📊 [RESULT] Decision: {result['llm_check_result']['decision_type']}")
-        print(f"📊 [RESULT] Next Node: {result['next_node']}")
-        print(f"📊 [RESULT] Reasoning: {result['llm_check_result']['reasoning']}")
-        print(f"📊 [RESULT] Confidence: {result['llm_check_result']['confidence']}")
+        print(f" [RESULT] Decision: {result['llm_check_result']['decision_type']}")
+        print(f" [RESULT] Next Node: {result['next_node']}")
+        print(f" [RESULT] Reasoning: {result['llm_check_result']['reasoning']}")
+        print(f" [RESULT] Confidence: {result['llm_check_result']['confidence']}")
         
         expected_node = "sql_generation"
         if result['next_node'] == expected_node:
-            print(f"✅ [TEST] Correctly routed to {expected_node}")
+            print(f" [TEST] Correctly routed to {expected_node}")
             return True
         else:
-            print(f"❌ [TEST] Expected {expected_node}, got {result['next_node']}")
+            print(f" [TEST] Expected {expected_node}, got {result['next_node']}")
             return False
             
     except Exception as e:
-        print(f"❌ [TEST] Error in not relevant test: {e}")
+        print(f" [TEST] Error in not relevant test: {e}")
         return False
 
 def test_no_kpi_scenario():
     """Test scenario when no KPI is found"""
-    print("\n🔧 [TEST] Testing NO_KPI scenario...")
+    print("\n [TEST] Testing NO_KPI scenario...")
     
     task = "show me some data"
     state = create_test_state(task)  # No KPI data
@@ -191,25 +191,25 @@ def test_no_kpi_scenario():
         node = LLMCheckerNode()
         result = node(state)
         
-        print(f"📊 [RESULT] Decision: {result['llm_check_result']['decision_type']}")
-        print(f"📊 [RESULT] Next Node: {result['next_node']}")
-        print(f"📊 [RESULT] Reasoning: {result['llm_check_result']['reasoning']}")
+        print(f" [RESULT] Decision: {result['llm_check_result']['decision_type']}")
+        print(f" [RESULT] Next Node: {result['next_node']}")
+        print(f" [RESULT] Reasoning: {result['llm_check_result']['reasoning']}")
         
         expected_node = "sql_generation"
         if result['next_node'] == expected_node:
-            print(f"✅ [TEST] Correctly routed to {expected_node} when no KPI found")
+            print(f" [TEST] Correctly routed to {expected_node} when no KPI found")
             return True
         else:
-            print(f"❌ [TEST] Expected {expected_node}, got {result['next_node']}")
+            print(f" [TEST] Expected {expected_node}, got {result['next_node']}")
             return False
             
     except Exception as e:
-        print(f"❌ [TEST] Error in no KPI test: {e}")
+        print(f" [TEST] Error in no KPI test: {e}")
         return False
 
 def test_claims_distribution_scenario():
     """Test the specific claims distribution scenario"""
-    print("\n🔧 [TEST] Testing Claims Distribution scenario...")
+    print("\n [TEST] Testing Claims Distribution scenario...")
     
     task = "Show the distribution of claims across different claim categories"
     kpi_data = {
@@ -226,11 +226,11 @@ def test_claims_distribution_scenario():
         node = LLMCheckerNode()
         result = node(state)
         
-        print(f"📊 [RESULT] Decision: {result['llm_check_result']['decision_type']}")
-        print(f"📊 [RESULT] Next Node: {result['next_node']}")
-        print(f"📊 [RESULT] Reasoning: {result['llm_check_result']['reasoning']}")
-        print(f"📊 [RESULT] Confidence: {result['llm_check_result']['confidence']}")
-        print(f"📊 [RESULT] KPI Metric: {result['llm_check_result']['kpi_metric']}")
+        print(f" [RESULT] Decision: {result['llm_check_result']['decision_type']}")
+        print(f" [RESULT] Next Node: {result['next_node']}")
+        print(f" [RESULT] Reasoning: {result['llm_check_result']['reasoning']}")
+        print(f" [RESULT] Confidence: {result['llm_check_result']['confidence']}")
+        print(f" [RESULT] KPI Metric: {result['llm_check_result']['kpi_metric']}")
         # Note: kpi_score is not included in llm_check_result, it's in the original KPI data
         
         # This should be a perfect match since the KPI exactly matches the user query
@@ -238,19 +238,19 @@ def test_claims_distribution_scenario():
         expected_node = "azure_retrieval"  # Fixed: should be azure_retrieval not aws_retrieval
         
         if result['llm_check_result']['decision_type'] == expected_decision and result['next_node'] == expected_node:
-            print(f"✅ [TEST] Correctly identified as {expected_decision} and routed to {expected_node}")
+            print(f" [TEST] Correctly identified as {expected_decision} and routed to {expected_node}")
             return True
         else:
-            print(f"❌ [TEST] Expected {expected_decision} -> {expected_node}, got {result['llm_check_result']['decision_type']} -> {result['next_node']}")
+            print(f" [TEST] Expected {expected_decision} -> {expected_node}, got {result['llm_check_result']['decision_type']} -> {result['next_node']}")
             return False
             
     except Exception as e:
-        print(f"❌ [TEST] Error in claims distribution test: {e}")
+        print(f" [TEST] Error in claims distribution test: {e}")
         return False
 
 def test_complex_scenarios():
     """Test more complex real-world scenarios"""
-    print("\n🔧 [TEST] Testing complex scenarios...")
+    print("\n [TEST] Testing complex scenarios...")
     
     scenarios = [
         {
@@ -293,7 +293,7 @@ def test_complex_scenarios():
     
     results = []
     for scenario in scenarios:
-        print(f"\n  📋 Testing: {scenario['name']}")
+        print(f"\n Testing: {scenario['name']}")
         state = create_test_state(scenario['task'], scenario['kpi'])
         
         try:
@@ -304,33 +304,33 @@ def test_complex_scenarios():
             next_node = result['next_node']
             reasoning = result['llm_check_result']['reasoning']
             
-            print(f"    📊 Decision: {decision}")
-            print(f"    📊 Next Node: {next_node}")
-            print(f"    📊 Reasoning: {reasoning[:100]}...")
+            print(f" Decision: {decision}")
+            print(f" Next Node: {next_node}")
+            print(f" Reasoning: {reasoning[:100]}...")
             
             # Check if decision matches expected
             if decision == scenario['expected_decision']:
-                print(f"    ✅ Correct decision: {decision}")
+                print(f" Correct decision: {decision}")
                 results.append(True)
             else:
-                print(f"    ⚠️  Expected {scenario['expected_decision']}, got {decision}")
+                print(f" Expected {scenario['expected_decision']}, got {decision}")
                 results.append(False)
                 
         except Exception as e:
-            print(f"    ❌ Error: {e}")
+            print(f" Error: {e}")
             results.append(False)
     
     return all(results)
 
 def interactive_llm_checker_test():
     """Interactive test for LLM checker - allows manual input"""
-    print("\n🔧 [INTERACTIVE] LLM Checker Interactive Test")
+    print("\n [INTERACTIVE] LLM Checker Interactive Test")
     print("=" * 50)
     
     node = LLMCheckerNode()
     
     while True:
-        print("\n" + "─" * 50)
+        print("\n" + "" * 50)
         print("Enter test data (or 'quit' to exit):")
         
         # Get user query
@@ -358,13 +358,13 @@ def interactive_llm_checker_test():
             state = create_test_state(task)  # No KPI
         
         # Run the test
-        print(f"\n🧠 [TESTING] Processing: '{task}'")
-        print("─" * 30)
+        print(f"\n [TESTING] Processing: '{task}'")
+        print("" * 30)
         
         try:
             result = node(state)
             
-            print("\n📊 [RESULTS]")
+            print("\n [RESULTS]")
             print(f"  Decision: {result['llm_check_result']['decision_type']}")
             print(f"  Next Node: {result['next_node']}")
             print(f"  Reasoning: {result['llm_check_result']['reasoning']}")
@@ -376,13 +376,13 @@ def interactive_llm_checker_test():
                 print(f"  KPI SQL: {result['llm_check_result']['kpi_sql'][:100]}...")
                 
         except Exception as e:
-            print(f"❌ [ERROR] Test failed: {e}")
+            print(f" [ERROR] Test failed: {e}")
             import traceback
             traceback.print_exc()
 
 def test_specific_problem_cases():
     """Test specific cases that are causing problems"""
-    print("\n🔧 [TEST] Testing Specific Problem Cases...")
+    print("\n [TEST] Testing Specific Problem Cases...")
     
     problem_cases = [
         {
@@ -427,7 +427,7 @@ def test_specific_problem_cases():
     node = LLMCheckerNode()
     
     for case in problem_cases:
-        print(f"\n  🧪 Testing: {case['name']}")
+        print(f"\n Testing: {case['name']}")
         print(f"     Task: {case['task']}")
         print(f"     Expected: {case['expected_decision']} → {case['expected_node']}")
         
@@ -446,29 +446,29 @@ def test_specific_problem_cases():
             routing_correct = actual_node == case['expected_node']
             
             if decision_correct and routing_correct:
-                print(f"     ✅ PASS - Correct decision and routing")
+                print(f" PASS - Correct decision and routing")
                 results.append(True)
             else:
-                print(f"     ❌ FAIL - Decision: {'✓' if decision_correct else '✗'}, Routing: {'✓' if routing_correct else '✗'}")
+                print(f" FAIL - Decision: {'' if decision_correct else ''}, Routing: {'' if routing_correct else ''}")
                 results.append(False)
                 
                 # Show the raw LLM response for debugging
-                print(f"     🔍 Debug Info:")
+                print(f" Debug Info:")
                 if 'reasoning' in result['llm_check_result']:
                     print(f"        Reasoning: {result['llm_check_result']['reasoning']}")
                     
         except Exception as e:
-            print(f"     ❌ ERROR: {e}")
+            print(f" ERROR: {e}")
             results.append(False)
     
     success_rate = sum(results) / len(results) * 100
-    print(f"\n📊 [PROBLEM CASES] Success Rate: {success_rate:.1f}% ({sum(results)}/{len(results)})")
+    print(f"\n [PROBLEM CASES] Success Rate: {success_rate:.1f}% ({sum(results)}/{len(results)})")
     
     return all(results)
 
 def main():
     """Run all tests"""
-    print("🚀 [TEST] Starting LLM Checker Node Tests")
+    print(" [TEST] Starting LLM Checker Node Tests")
     print("=" * 60)
     
     tests = [
@@ -491,19 +491,19 @@ def main():
         try:
             if test_func():
                 passed += 1
-                print(f"✅ [TEST] {test_name} PASSED")
+                print(f" [TEST] {test_name} PASSED")
             else:
-                print(f"❌ [TEST] {test_name} FAILED")
+                print(f" [TEST] {test_name} FAILED")
         except Exception as e:
-            print(f"❌ [TEST] {test_name} ERROR: {e}")
+            print(f" [TEST] {test_name} ERROR: {e}")
     
     print(f"\n{'='*60}")
-    print(f"📊 [SUMMARY] Tests Passed: {passed}/{total}")
+    print(f" [SUMMARY] Tests Passed: {passed}/{total}")
     
     if passed == total:
-        print("🎉 [SUCCESS] All tests passed!")
+        print(" [SUCCESS] All tests passed!")
     else:
-        print("⚠️  [WARNING] Some tests failed. Check the output above.")
+        print(" [WARNING] Some tests failed. Check the output above.")
     
     return passed == total
 
@@ -512,10 +512,10 @@ if __name__ == "__main__":
     
     # Check if interactive mode is requested
     if len(sys.argv) > 1 and sys.argv[1] == "interactive":
-        print("🔧 [MODE] Starting Interactive LLM Checker Test")
+        print(" [MODE] Starting Interactive LLM Checker Test")
         interactive_llm_checker_test()
     else:
-        print("🔧 [MODE] Running Automated Tests")
-        print("💡 [TIP] Use 'python test_llm_checker.py interactive' for interactive testing")
+        print(" [MODE] Running Automated Tests")
+        print(" [TIP] Use 'python test_llm_checker.py interactive' for interactive testing")
         success = main()
         sys.exit(0 if success else 1)

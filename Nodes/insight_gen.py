@@ -172,7 +172,7 @@ class InsightGenerationNode:
         """
         
         try:
-            print("🧠 [INSIGHT GENERATION] Generating AI-powered insights...")
+            print(" [INSIGHT GENERATION] Generating AI-powered insights...")
             response = self.llm.invoke(insight_prompt)
             llm_insights = response.content.strip()
             
@@ -185,7 +185,7 @@ class InsightGenerationNode:
                 llm_insights = llm_insights[:-3]  # Remove trailing ```
             llm_insights = llm_insights.strip()
             
-            print(f"🔍 [INSIGHT GENERATION] Cleaned response: {llm_insights[:200]}...")
+            print(f" [INSIGHT GENERATION] Cleaned response: {llm_insights[:200]}...")
             
             # Try to parse JSON response
             try:
@@ -205,16 +205,16 @@ class InsightGenerationNode:
                     "total_rows": len(data)
                 }
                 
-                print(f"✅ [INSIGHT GENERATION] Generated {len(insights.get('key_findings', []))} key findings")
+                print(f" [INSIGHT GENERATION] Generated {len(insights.get('key_findings', []))} key findings")
                 return insights
                 
             except json.JSONDecodeError:
                 # Fallback: parse as plain text
-                print("⚠️ [INSIGHT GENERATION] LLM response not in JSON format, parsing as text")
+                print(" [INSIGHT GENERATION] LLM response not in JSON format, parsing as text")
                 return self._parse_text_insights(llm_insights, data, columns, azure_data)
                 
         except Exception as e:
-            print(f"❌ [INSIGHT GENERATION] Error generating LLM insights: {str(e)}")
+            print(f" [INSIGHT GENERATION] Error generating LLM insights: {str(e)}")
             # Fallback to basic analysis
             return self._generate_basic_insights(data, columns, azure_data)
     

@@ -1,0 +1,36 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	start(start)
+	orchestrator(orchestrator)
+	kpi_retrieval(kpi_retrieval)
+	metadata_retrieval(metadata_retrieval)
+	llm_checker(llm_checker)
+	kpi_editor(kpi_editor)
+	sql_generation(sql_generation)
+	azure_retrieval(azure_retrieval)
+	insight_generation(insight_generation)
+	end(end)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> start;
+	azure_retrieval --> insight_generation;
+	insight_generation --> end;
+	kpi_editor --> azure_retrieval;
+	kpi_retrieval --> metadata_retrieval;
+	llm_checker -.-> azure_retrieval;
+	llm_checker -.-> end;
+	llm_checker -.-> kpi_editor;
+	llm_checker -.-> sql_generation;
+	metadata_retrieval --> llm_checker;
+	orchestrator -.-> end;
+	orchestrator -.-> kpi_retrieval;
+	sql_generation --> azure_retrieval;
+	start --> orchestrator;
+	end --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

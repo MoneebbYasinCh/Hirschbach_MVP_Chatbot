@@ -44,7 +44,7 @@ class KPIEditorNode:
             # Fallback: use the last message
             task = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
         
-        print(f"🔍 [KPI_EDITOR] Extracted task: '{task}'")
+        print(f" [KPI_EDITOR] Extracted task: '{task}'")
         
         # Get KPI data from state
         top_kpi = state.get("top_kpi")
@@ -93,18 +93,18 @@ class KPIEditorNode:
             
             # Set success status
             if edited_sql == original_sql:
-                print(f"⚠️ [KPI_EDITOR] No changes made to SQL")
-                print(f"📝 [KPI_EDITOR] Final SQL: {edited_sql}")
+                print(f" [KPI_EDITOR] No changes made to SQL")
+                print(f" [KPI_EDITOR] Final SQL: {edited_sql}")
                 modifications = ["No changes needed"]
             else:
-                print(f"✅ [KPI_EDITOR] Successfully modified KPI SQL")
-                print(f"📝 [KPI_EDITOR] Modified SQL: {edited_sql}")
+                print(f" [KPI_EDITOR] Successfully modified KPI SQL")
+                print(f" [KPI_EDITOR] Modified SQL: {edited_sql}")
                 modifications = ["Modified SQL query to better match user requirements"]
             
             return self._set_success_state(state, edited_sql, modifications)
             
         except Exception as e:
-            print(f"❌ [KPI_EDITOR] Error: {str(e)}")
+            print(f" [KPI_EDITOR] Error: {str(e)}")
             return self._set_error_state(state, str(e))
     
     def _set_error_state(self, state: Dict, error_msg: str) -> Dict:
@@ -200,13 +200,13 @@ class KPIEditorNode:
                 for col in selected_columns:
                     if col in available_columns and col not in needed_columns:
                         needed_columns.append(col)
-                        print(f"🔧 [KPI_EDITOR] Selected additional column: {col}")
+                        print(f" [KPI_EDITOR] Selected additional column: {col}")
             
         except Exception as e:
-            print(f"⚠️ [KPI_EDITOR] Error analyzing needed columns: {str(e)}")
+            print(f" [KPI_EDITOR] Error analyzing needed columns: {str(e)}")
         
         if not needed_columns:
-            print("🔧 [KPI_EDITOR] No additional columns needed - existing SQL is sufficient")
+            print(" [KPI_EDITOR] No additional columns needed - existing SQL is sufficient")
         
         return needed_columns
     
@@ -268,14 +268,14 @@ class KPIEditorNode:
         """
         
         try:
-            print(f"🔍 [KPI_EDITOR] Step 2 Input - Task: '{task}'")
-            print(f"🔍 [KPI_EDITOR] Step 2 Input - Available columns: {needed_columns}")
-            print(f"🔍 [KPI_EDITOR] Step 2 Prompt Preview: {analysis_prompt[:200]}...")
+            print(f" [KPI_EDITOR] Step 2 Input - Task: '{task}'")
+            print(f" [KPI_EDITOR] Step 2 Input - Available columns: {needed_columns}")
+            print(f" [KPI_EDITOR] Step 2 Prompt Preview: {analysis_prompt[:200]}...")
             
             response = self.llm.invoke(analysis_prompt)
             analysis_result = response.content.strip()
             
-            print(f"🔍 [KPI_EDITOR] Step 2 LLM Response: '{analysis_result}'")
+            print(f" [KPI_EDITOR] Step 2 LLM Response: '{analysis_result}'")
             
             columns_needing_mapping = []
             if analysis_result.lower() != "none" and analysis_result:
@@ -286,15 +286,15 @@ class KPIEditorNode:
                 for col in selected_columns:
                     if col in needed_columns and col not in columns_needing_mapping:
                         columns_needing_mapping.append(col)
-                        print(f"🔍 [KPI_EDITOR] Column needs specific handling: {col}")
+                        print(f" [KPI_EDITOR] Column needs specific handling: {col}")
             
             if not columns_needing_mapping:
-                print("🔍 [KPI_EDITOR] No columns need specific handling - using generic approach")
+                print(" [KPI_EDITOR] No columns need specific handling - using generic approach")
             
             return columns_needing_mapping
             
         except Exception as e:
-            print(f"⚠️ [KPI_EDITOR] Error analyzing mapping needs: {str(e)}")
+            print(f" [KPI_EDITOR] Error analyzing mapping needs: {str(e)}")
             # Fallback: assume all columns need mapping (current behavior)
             return needed_columns
     
@@ -374,21 +374,21 @@ class KPIEditorNode:
                                 'type': logic_type.strip(),
                                 'value': value.strip()
                             }
-                            print(f"🔧 [KPI_EDITOR] Mapped {column} to: {logic_type.strip()}:{value.strip()}")
+                            print(f" [KPI_EDITOR] Mapped {column} to: {logic_type.strip()}:{value.strip()}")
                         else:
                             # Fallback for simple values
                             mapped_values[column] = {
                                 'type': 'categorical',
                                 'value': logic_spec
                             }
-                            print(f"🔧 [KPI_EDITOR] Mapped {column} to: categorical:{logic_spec}")
+                            print(f" [KPI_EDITOR] Mapped {column} to: categorical:{logic_spec}")
                     else:
-                        print(f"⚠️ [KPI_EDITOR] Could not map {column} - unclear intent")
+                        print(f" [KPI_EDITOR] Could not map {column} - unclear intent")
             
             return mapped_values
             
         except Exception as e:
-            print(f"⚠️ [KPI_EDITOR] Error mapping user intent to values: {str(e)}")
+            print(f" [KPI_EDITOR] Error mapping user intent to values: {str(e)}")
             return {}
     
     def _create_sql_generation_prompt_step3(self, task: str, kpi_metric: str, kpi_description: str, original_sql: str, metadata_results: List[Dict[str, Any]], mapped_values: Dict[str, Any]) -> str:
@@ -500,11 +500,11 @@ class KPIEditorNode:
                 if result and result.get("success", False):
                     values = result.get("values", [])
                     entity_data.append(f"- {column_name}: {values}")
-                    print(f"🔧 [KPI_EDITOR] Added entity mapping for {column_name}: {values}")
+                    print(f" [KPI_EDITOR] Added entity mapping for {column_name}: {values}")
                 else:
-                    print(f"⚠️ [KPI_EDITOR] No values found for column: {column_name}")
+                    print(f" [KPI_EDITOR] No values found for column: {column_name}")
             except Exception as e:
-                print(f"⚠️ [KPI_EDITOR] Error getting values for {column_name}: {str(e)}")
+                print(f" [KPI_EDITOR] Error getting values for {column_name}: {str(e)}")
         
         if not entity_data:
             return "No exact values available for the needed columns"

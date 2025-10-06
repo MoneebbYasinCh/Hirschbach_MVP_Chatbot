@@ -18,9 +18,8 @@ class EntityMappingTool:
     """
     Tool for mapping entities to exact database values using column-based lookup
     """
-    
+
     def __init__(self):
-        # Initialize Azure OpenAI
         self.llm = AzureChatOpenAI(
             azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini"),
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
@@ -28,8 +27,7 @@ class EntityMappingTool:
             api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-07-18"),
             temperature=0.0
         )
-        
-        # Load CSV data
+
         self.csv_data = self._load_csv_data()
         
     def _load_csv_data(self) -> pd.DataFrame:
@@ -38,13 +36,13 @@ class EntityMappingTool:
             csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'Data', 'For_BM25.csv')
             if os.path.exists(csv_path):
                 df = pd.read_csv(csv_path)
-                print(f"✅ [ENTITY MAPPING] Loaded CSV data: {len(df)} rows")
+                print(f" [ENTITY MAPPING] Loaded CSV data: {len(df)} rows")
                 return df
             else:
-                print(f"❌ [ENTITY MAPPING] CSV file not found: {csv_path}")
+                print(f" [ENTITY MAPPING] CSV file not found: {csv_path}")
                 return pd.DataFrame()
         except Exception as e:
-            print(f"❌ [ENTITY MAPPING] Error loading CSV: {str(e)}")
+            print(f" [ENTITY MAPPING] Error loading CSV: {str(e)}")
             return pd.DataFrame()
     
     def get_column_values(self, column_name: str) -> Dict[str, Any]:
@@ -60,7 +58,7 @@ class EntityMappingTool:
         print(f"[ENTITY MAPPING] Getting values for column: '{column_name}'")
         
         if self.csv_data.empty:
-            print("❌ [ENTITY MAPPING] No CSV data available")
+            print(" [ENTITY MAPPING] No CSV data available")
             return {"error": "No CSV data available", "values": [], "column_name": column_name}
         
         try:
@@ -69,7 +67,7 @@ class EntityMappingTool:
             available_values = column_info.get("values", [])
             
             if not available_values:
-                print(f"⚠️ [ENTITY MAPPING] No values found for column '{column_name}'")
+                print(f" [ENTITY MAPPING] No values found for column '{column_name}'")
                 return {
                     "error": f"No values found for column '{column_name}'",
                     "values": [],
@@ -85,11 +83,11 @@ class EntityMappingTool:
             
             # Show only first 3 values and count
             preview = available_values[:3] if len(available_values) > 3 else available_values
-            print(f"✅ [ENTITY MAPPING] Found {len(available_values)} values for '{column_name}': {preview}{'...' if len(available_values) > 3 else ''}")
+            print(f" [ENTITY MAPPING] Found {len(available_values)} values for '{column_name}': {preview}{'...' if len(available_values) > 3 else ''}")
             return result
                     
         except Exception as e:
-            print(f"⚠️ [ENTITY MAPPING] Error getting values for '{column_name}': {str(e)}")
+            print(f" [ENTITY MAPPING] Error getting values for '{column_name}': {str(e)}")
             return {
                 "error": f"Error getting values: {str(e)}",
                 "values": [],
@@ -104,7 +102,7 @@ class EntityMappingTool:
             column_data = self.csv_data[self.csv_data['COLUMNNAME'] == column_name]
             
             if column_data.empty:
-                print(f"⚠️ [ENTITY MAPPING] No data found for column '{column_name}'")
+                print(f" [ENTITY MAPPING] No data found for column '{column_name}'")
                 return {"values": [], "source": "none", "distinct_count": 0}
             
             row = column_data.iloc[0]
@@ -131,7 +129,7 @@ class EntityMappingTool:
             
             # Log the results
             if parsed_values:
-                print(f"📊 [ENTITY MAPPING] Column '{column_name}' has {len(parsed_values)} values from {source}")
+                print(f" [ENTITY MAPPING] Column '{column_name}' has {len(parsed_values)} values from {source}")
             
             result = {
                 "values": parsed_values,
@@ -142,11 +140,11 @@ class EntityMappingTool:
             
             # Show only first 3 values and count
             preview = parsed_values[:3] if len(parsed_values) > 3 else parsed_values
-            print(f"📊 [ENTITY MAPPING] Found {len(parsed_values)} values for '{column_name}' (source: {source}): {preview}{'...' if len(parsed_values) > 3 else ''}")
+            print(f" [ENTITY MAPPING] Found {len(parsed_values)} values for '{column_name}' (source: {source}): {preview}{'...' if len(parsed_values) > 3 else ''}")
             return result
             
         except Exception as e:
-            print(f"⚠️ [ENTITY MAPPING] Error getting column values: {str(e)}")
+            print(f" [ENTITY MAPPING] Error getting column values: {str(e)}")
             return {"values": [], "source": "error", "distinct_count": 0}
     
     

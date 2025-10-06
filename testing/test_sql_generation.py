@@ -9,18 +9,16 @@ import sys
 from typing import Dict, Any
 from dotenv import load_dotenv
 
-# Add the project root to the path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
-# Load environment variables from .env file
 load_dotenv(os.path.join(project_root, '.env'))
 
 from Nodes.sql_gen import SQLGenerationNode
 
 def test_environment_setup():
     """Test if environment variables are properly set"""
-    print("🔧 [TEST] Checking environment setup...")
+    print(" [TEST] Checking environment setup...")
     
     required_vars = [
         "AZURE_OPENAI_ENDPOINT",
@@ -35,22 +33,22 @@ def test_environment_setup():
             missing_vars.append(var)
     
     if missing_vars:
-        print(f"❌ [TEST] Missing environment variables: {missing_vars}")
+        print(f" [TEST] Missing environment variables: {missing_vars}")
         return False
     else:
-        print("✅ [TEST] All environment variables are set")
+        print(" [TEST] All environment variables are set")
         return True
 
 def test_node_initialization():
     """Test if the SQL generation node initializes properly"""
-    print("\n🔧 [TEST] Testing node initialization...")
+    print("\n [TEST] Testing node initialization...")
     
     try:
         node = SQLGenerationNode()
-        print("✅ [TEST] SQL Generation node initialized successfully")
+        print(" [TEST] SQL Generation node initialized successfully")
         return True
     except Exception as e:
-        print(f"❌ [TEST] Failed to initialize SQL Generation node: {str(e)}")
+        print(f" [TEST] Failed to initialize SQL Generation node: {str(e)}")
         return False
 
 def create_test_state_with_metadata():
@@ -125,7 +123,7 @@ def create_test_state_without_messages():
 
 def test_sql_generation_with_valid_data():
     """Test SQL generation with valid metadata"""
-    print("\n🔧 [TEST] Testing SQL generation with valid data...")
+    print("\n [TEST] Testing SQL generation with valid data...")
     
     try:
         node = SQLGenerationNode()
@@ -142,7 +140,7 @@ def test_sql_generation_with_valid_data():
         assert "sql_generation_result" in result_state, "sql_generation_result should be set"
         
         if result_state["sql_generation_status"] == "completed":
-            print("✅ [TEST] SQL generation completed successfully")
+            print(" [TEST] SQL generation completed successfully")
             print(f"[TEST] Generated SQL: {result_state['generated_sql'][:100]}...")
             
             # Check if SQL was generated
@@ -151,16 +149,16 @@ def test_sql_generation_with_valid_data():
             
             return True
         else:
-            print(f"❌ [TEST] SQL generation failed: {result_state.get('sql_generation_error', 'Unknown error')}")
+            print(f" [TEST] SQL generation failed: {result_state.get('sql_generation_error', 'Unknown error')}")
             return False
             
     except Exception as e:
-        print(f"❌ [TEST] Error during SQL generation test: {str(e)}")
+        print(f" [TEST] Error during SQL generation test: {str(e)}")
         return False
 
 def test_sql_generation_without_metadata():
     """Test SQL generation without metadata"""
-    print("\n🔧 [TEST] Testing SQL generation without metadata...")
+    print("\n [TEST] Testing SQL generation without metadata...")
     
     try:
         node = SQLGenerationNode()
@@ -172,16 +170,16 @@ def test_sql_generation_without_metadata():
         assert result_state["sql_generation_status"] == "error", "Should set error status for missing metadata"
         assert "sql_generation_error" in result_state, "Should set error message"
         
-        print("✅ [TEST] SQL generation handled missing metadata correctly")
+        print(" [TEST] SQL generation handled missing metadata correctly")
         return True
         
     except Exception as e:
-        print(f"❌ [TEST] Error during missing metadata test: {str(e)}")
+        print(f" [TEST] Error during missing metadata test: {str(e)}")
         return False
 
 def test_sql_generation_without_messages():
     """Test SQL generation without messages"""
-    print("\n🔧 [TEST] Testing SQL generation without messages...")
+    print("\n [TEST] Testing SQL generation without messages...")
     
     try:
         node = SQLGenerationNode()
@@ -193,16 +191,16 @@ def test_sql_generation_without_messages():
         assert result_state["sql_generation_status"] == "error", "Should set error status for missing messages"
         assert "sql_generation_error" in result_state, "Should set error message"
         
-        print("✅ [TEST] SQL generation handled missing messages correctly")
+        print(" [TEST] SQL generation handled missing messages correctly")
         return True
         
     except Exception as e:
-        print(f"❌ [TEST] Error during missing messages test: {str(e)}")
+        print(f" [TEST] Error during missing messages test: {str(e)}")
         return False
 
 def test_metadata_formatting():
     """Test the metadata formatting helper method"""
-    print("\n🔧 [TEST] Testing metadata formatting...")
+    print("\n [TEST] Testing metadata formatting...")
     
     try:
         node = SQLGenerationNode()
@@ -227,17 +225,17 @@ def test_metadata_formatting():
         assert "state (varchar)" in formatted, "Should include column name and type"
         assert "claim_date (date)" in formatted, "Should include different data types"
         
-        print("✅ [TEST] Metadata formatting works correctly")
+        print(" [TEST] Metadata formatting works correctly")
         print(f"[TEST] Formatted metadata preview:\n{formatted[:200]}...")
         return True
         
     except Exception as e:
-        print(f"❌ [TEST] Error during metadata formatting test: {str(e)}")
+        print(f" [TEST] Error during metadata formatting test: {str(e)}")
         return False
 
 def test_column_validation():
     """Test column validation functionality"""
-    print("\n🔧 [TEST] Testing column validation...")
+    print("\n [TEST] Testing column validation...")
     
     try:
         node = SQLGenerationNode()
@@ -254,16 +252,16 @@ def test_column_validation():
         result = node._validate_sql_columns(invalid_sql, available_columns)
         assert "INVALID COLUMN" in result, "Should detect invalid columns"
         
-        print("✅ [TEST] Column validation works correctly")
+        print(" [TEST] Column validation works correctly")
         return True
         
     except Exception as e:
-        print(f"❌ [TEST] Error during column validation test: {str(e)}")
+        print(f" [TEST] Error during column validation test: {str(e)}")
         return False
 
 def test_filter_values_validation():
     """Test filter values validation against unique values database"""
-    print("\n🔧 [TEST] Testing filter values validation...")
+    print("\n [TEST] Testing filter values validation...")
     
     try:
         node = SQLGenerationNode()
@@ -283,16 +281,16 @@ def test_filter_values_validation():
         # Should either find a match or comment out the line
         assert "INVALID VALUE" in result or "NO MATCH FOUND" in result, "Should detect invalid filter values"
         
-        print("✅ [TEST] Filter values validation works correctly")
+        print(" [TEST] Filter values validation works correctly")
         return True
         
     except Exception as e:
-        print(f"❌ [TEST] Error during filter values validation test: {str(e)}")
+        print(f" [TEST] Error during filter values validation test: {str(e)}")
         return False
 
 def test_placeholder_replacement():
     """Test placeholder replacement functionality"""
-    print("\n🔧 [TEST] Testing placeholder replacement...")
+    print("\n [TEST] Testing placeholder replacement...")
     
     try:
         node = SQLGenerationNode()
@@ -316,17 +314,17 @@ def test_placeholder_replacement():
         # Should contain either the original terms or BM25 matches
         assert "California" in final_sql or "california" in final_sql.lower() or "CA" in final_sql, "Should contain search terms or matches"
         
-        print("✅ [TEST] Placeholder replacement works correctly")
+        print(" [TEST] Placeholder replacement works correctly")
         print(f"[TEST] Final SQL: {final_sql[:100]}...")
         return True
         
     except Exception as e:
-        print(f"❌ [TEST] Error during placeholder replacement test: {str(e)}")
+        print(f" [TEST] Error during placeholder replacement test: {str(e)}")
         return False
 
 def test_sql_extraction():
     """Test SQL extraction from LLM response"""
-    print("\n🔧 [TEST] Testing SQL extraction...")
+    print("\n [TEST] Testing SQL extraction...")
     
     try:
         node = SQLGenerationNode()
@@ -352,17 +350,17 @@ def test_sql_extraction():
         assert "claims_summary" in extracted_sql, "Should include table name"
         assert "{PLACEHOLDER" in extracted_sql, "Should preserve placeholders"
         
-        print("✅ [TEST] SQL extraction works correctly")
+        print(" [TEST] SQL extraction works correctly")
         print(f"[TEST] Extracted SQL: {extracted_sql[:100]}...")
         return True
         
     except Exception as e:
-        print(f"❌ [TEST] Error during SQL extraction test: {str(e)}")
+        print(f" [TEST] Error during SQL extraction test: {str(e)}")
         return False
 
 def run_all_tests():
     """Run all tests and report results"""
-    print("🚀 [TEST] Starting SQL Generation Node Tests")
+    print(" [TEST] Starting SQL Generation Node Tests")
     print("=" * 50)
     
     tests = [
@@ -382,28 +380,28 @@ def run_all_tests():
     total = len(tests)
     
     for test_name, test_func in tests:
-        print(f"\n📋 [TEST] Running: {test_name}")
+        print(f"\n [TEST] Running: {test_name}")
         try:
             if test_func():
                 passed += 1
             else:
-                print(f"❌ [TEST] {test_name} failed")
+                print(f" [TEST] {test_name} failed")
         except Exception as e:
-            print(f"❌ [TEST] {test_name} failed with exception: {str(e)}")
+            print(f" [TEST] {test_name} failed with exception: {str(e)}")
     
     print("\n" + "=" * 50)
-    print(f"📊 [TEST] Results: {passed}/{total} tests passed")
+    print(f" [TEST] Results: {passed}/{total} tests passed")
     
     if passed == total:
-        print("🎉 [TEST] All tests passed! SQL Generation node is working correctly.")
+        print(" [TEST] All tests passed! SQL Generation node is working correctly.")
     else:
-        print(f"⚠️ [TEST] {total - passed} tests failed. Please check the implementation.")
+        print(f" [TEST] {total - passed} tests failed. Please check the implementation.")
     
     return passed == total
 
 def interactive_sql_test():
     """Interactive SQL generation test where user can input prompts"""
-    print("🎮 INTERACTIVE SQL GENERATION TEST")
+    print(" INTERACTIVE SQL GENERATION TEST")
     print("=" * 60)
     print("Enter your queries below. Type 'quit', 'exit', or 'q' to stop.")
     print("Type 'test' to run automated tests instead.")
@@ -411,16 +409,16 @@ def interactive_sql_test():
     
     # Check environment first
     if not test_environment_setup():
-        print("❌ Environment setup failed. Please fix missing variables and try again.")
+        print(" Environment setup failed. Please fix missing variables and try again.")
         return
     
     # Initialize the node
     try:
-        print("\n📡 Initializing SQL Generation Node...")
+        print("\n Initializing SQL Generation Node...")
         node = SQLGenerationNode()
-        print("✅ SQL Generation Node initialized successfully!")
+        print(" SQL Generation Node initialized successfully!")
     except Exception as e:
-        print(f"❌ Failed to initialize SQL Generation Node: {str(e)}")
+        print(f" Failed to initialize SQL Generation Node: {str(e)}")
         return
     
     # Create sample metadata for testing
@@ -463,7 +461,7 @@ def interactive_sql_test():
         }
     ]
     
-    print(f"\n📊 Available columns: {len(sample_metadata)}")
+    print(f"\n Available columns: {len(sample_metadata)}")
     for col in sample_metadata:
         print(f"  - {col['column_name']} ({col['data_type']}): {col['description']}")
     
@@ -476,21 +474,21 @@ def interactive_sql_test():
             
             # Check for exit commands
             if query.lower() in ['quit', 'exit', 'q']:
-                print("👋 Goodbye!")
+                print(" Goodbye!")
                 break
             
             # Check for test command
             if query.lower() == 'test':
-                print("\n🧪 Running automated tests...")
+                print("\n Running automated tests...")
                 success = run_all_tests()
-                print(f"\n📊 Test results: {'All passed!' if success else 'Some failed!'}")
+                print(f"\n Test results: {'All passed!' if success else 'Some failed!'}")
                 continue
             
             if not query:
-                print("⚠️ Please enter a valid query")
+                print(" Please enter a valid query")
                 continue
             
-            print(f"\n🔄 Processing: '{query}'")
+            print(f"\n Processing: '{query}'")
             print("-" * 40)
             
             # Create test state
@@ -511,12 +509,12 @@ def interactive_sql_test():
             
             # Display results
             status = result_state.get("sql_generation_status", "unknown")
-            print(f"📊 Status: {status}")
+            print(f" Status: {status}")
             
             if status == "completed":
                 generated_sql = result_state.get("generated_sql", "")
-                print(f"\n✅ SQL GENERATED SUCCESSFULLY:")
-                print(f"📝 Generated SQL:")
+                print(f"\n SQL GENERATED SUCCESSFULLY:")
+                print(f" Generated SQL:")
                 print("-" * 40)
                 print(generated_sql)
                 print("-" * 40)
@@ -524,31 +522,31 @@ def interactive_sql_test():
                 # Show additional info
                 result_info = result_state.get("sql_generation_result", {})
                 if result_info.get("entities_extracted", 0) > 0:
-                    print(f"🔍 Entities extracted: {result_info.get('entities_extracted', 0)}")
+                    print(f" Entities extracted: {result_info.get('entities_extracted', 0)}")
                 
                 if result_info.get("extracted_entities"):
-                    print(f"📋 Extracted entities: {result_info['extracted_entities']}")
+                    print(f" Extracted entities: {result_info['extracted_entities']}")
                 
             else:
                 error_msg = result_state.get("sql_generation_error", "Unknown error")
-                print(f"❌ SQL generation failed: {error_msg}")
+                print(f" SQL generation failed: {error_msg}")
                 
                 # Show partial results if available
                 generated_sql = result_state.get("generated_sql", "")
                 if generated_sql:
-                    print(f"📝 Partial SQL generated:")
+                    print(f" Partial SQL generated:")
                     print("-" * 40)
                     print(generated_sql)
                     print("-" * 40)
             
         except KeyboardInterrupt:
-            print("\n👋 Goodbye!")
+            print("\n Goodbye!")
             break
         except EOFError:
-            print("\n👋 Goodbye!")
+            print("\n Goodbye!")
             break
         except Exception as e:
-            print(f"❌ Error processing query: {e}")
+            print(f" Error processing query: {e}")
             import traceback
             traceback.print_exc()
 
@@ -560,6 +558,6 @@ if __name__ == "__main__":
         interactive_sql_test()
     else:
         # Default to interactive mode
-        print("🚀 Starting Interactive SQL Generation Test")
-        print("💡 Use '--test' flag for automated test mode")
+        print(" Starting Interactive SQL Generation Test")
+        print(" Use '--test' flag for automated test mode")
         interactive_sql_test()

@@ -108,7 +108,7 @@ DEFAULT: If unsure, choose IN_SCOPE.
                     
                     # Only block if BOTH out of scope AND high confidence
                     if decision == "OUT_OF_SCOPE" and confidence == "HIGH":
-                        print(f"🚫 [LLM_CHECKER] OUT_OF_SCOPE (High Confidence): {reasoning}")
+                        print(f" [LLM_CHECKER] OUT_OF_SCOPE (High Confidence): {reasoning}")
                         state["llm_check_result"] = {
                             "decision_type": "out_of_scope",
                             "reasoning": reasoning,
@@ -125,18 +125,18 @@ DEFAULT: If unsure, choose IN_SCOPE.
                         return state
                     else:
                         # IN_SCOPE or not confident enough - let it proceed
-                        print(f"✅ [LLM_CHECKER] IN_SCOPE - Proceeding with request")
-                        print(f"🔍 [LLM_CHECKER] Decision: IN_SCOPE")
+                        print(f" [LLM_CHECKER] IN_SCOPE - Proceeding with request")
+                        print(f" [LLM_CHECKER] Decision: IN_SCOPE")
                         
                 except json.JSONDecodeError as e:
                     # If JSON parsing fails, default to IN_SCOPE
-                    print(f"⚠️ [LLM_CHECKER] Could not parse scope response - defaulting to IN_SCOPE")
-                    print(f"⚠️ [LLM_CHECKER] Raw response: {scope_content[:200]}...")
+                    print(f" [LLM_CHECKER] Could not parse scope response - defaulting to IN_SCOPE")
+                    print(f" [LLM_CHECKER] Raw response: {scope_content[:200]}...")
                     pass
                     
         except Exception as e:
             # Always fail open - let the request proceed
-            print(f"⚠️ [LLM_CHECKER] Scope check error: {str(e)} - defaulting to IN_SCOPE")
+            print(f" [LLM_CHECKER] Scope check error: {str(e)} - defaulting to IN_SCOPE")
             pass
         
         # Get KPI results from the state
@@ -224,7 +224,7 @@ DEFAULT: If unsure, choose IN_SCOPE.
                 next_node = "sql_generation"
             else:
                 # Fallback if LLM didn't follow instructions
-                print(f"⚠️ [LLM_CHECKER] Unexpected response: '{response_text}' - defaulting to not_relevant")
+                print(f" [LLM_CHECKER] Unexpected response: '{response_text}' - defaulting to not_relevant")
                 decision_type = "not_relevant"
                 next_node = "sql_generation"
             
@@ -236,14 +236,14 @@ DEFAULT: If unsure, choose IN_SCOPE.
                 "kpi_sql": kpi_sql,
             }
             
-            print(f"🧠 [LLM_CHECKER] Decision: {decision_type.upper()} → {next_node}")
+            print(f" [LLM_CHECKER] Decision: {decision_type.upper()} → {next_node}")
             print(f"  Task: {task}")
             print(f"  KPI: {kpi_metric}")
-            print(f"🔍 [LLM_CHECKER] Decision: {decision_type}")
+            print(f" [LLM_CHECKER] Decision: {decision_type}")
             
             # If perfect match, also show the SQL that will be executed
             if decision_type == "perfect_match" and kpi_sql:
-                print(f"📝 [LLM_CHECKER] SQL to execute: {kpi_sql}")
+                print(f" [LLM_CHECKER] SQL to execute: {kpi_sql}")
             
             # Update state and return it
             state["llm_check_result"] = llm_check_result
@@ -261,7 +261,7 @@ DEFAULT: If unsure, choose IN_SCOPE.
                 "kpi_sql": kpi_sql,
             }
             
-            print(f"❌ [LLM_CHECKER] Error: {str(e)} - Using fallback decision")
+            print(f" [LLM_CHECKER] Error: {str(e)} - Using fallback decision")
             
             # Update state and return it
             state["llm_check_result"] = fallback_result

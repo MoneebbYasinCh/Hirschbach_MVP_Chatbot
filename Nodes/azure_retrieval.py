@@ -10,10 +10,8 @@ class AzureRetrievalNode:
     
     def __init__(self):
         """Initialize Azure SQL Database connection parameters"""
-        # Use single connection string from environment (just like diagnostic)
         self.connection_string = os.getenv("SQL_CONNECTION_STRING")
-        
-        # Configure logging only if not already configured
+
         if not logging.getLogger().handlers:
             logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
@@ -31,32 +29,27 @@ class AzureRetrievalNode:
         self.logger.info("[AZURE RETRIEVAL] Processing Azure data retrieval...")
         print("[AZURE RETRIEVAL] Processing Azure data retrieval...")
         
-        # Get SQL and validation results from various sources
         sql_validated = state.get("sql_validated", False)
         kpi_validated = state.get("kpi_validated", False)
         generated_sql = state.get("generated_sql", "")
         edited_kpi = state.get("edited_kpi", {})
-        # Guard against None stored in state["top_kpi"]
         top_kpi = state.get("top_kpi") or {}
-        
-        # Force check for sql_generation_status as alternative indicator
+
         sql_generation_status = state.get("sql_generation_status", "")
         if sql_generation_status == "completed" and generated_sql:
             sql_validated = True
-            print(f"[AZURE RETRIEVAL] Override: Setting sql_validated = True based on sql_generation_status")
+            self.logger.debug(f"Override: Setting sql_validated = True based on sql_generation_status")
+
+        self.logger.debug(f"sql_validated: {sql_validated}")
+        self.logger.debug(f"generated_sql: {generated_sql[:100] if generated_sql else 'None'}")
+        self.logger.debug(f"top_kpi sql: {top_kpi.get('sql_query', 'None')[:100] if isinstance(top_kpi, dict) and top_kpi.get('sql_query') else 'None'}")
+        self.logger.debug(f"State keys: {list(state.keys())}")
+        self.logger.debug(f"sql_generation_status: {state.get('sql_generation_status', 'Not set')}")
+        self.logger.debug(f"Raw sql_validated from state: {state.get('sql_validated')}")
+        self.logger.debug(f"Raw generated_sql from state: {state.get('generated_sql', '')[:100] if state.get('generated_sql') else 'None'}")
         
-        # Debug output to see what we're working with
-        print(f"[AZURE RETRIEVAL] Debug - sql_validated: {sql_validated}")
-        print(f"[AZURE RETRIEVAL] Debug - generated_sql: {generated_sql[:100] if generated_sql else 'None'}")
-        print(f"[AZURE RETRIEVAL] Debug - top_kpi sql: {top_kpi.get('sql_query', 'None')[:100] if isinstance(top_kpi, dict) and top_kpi.get('sql_query') else 'None'}")
-        print(f"[AZURE RETRIEVAL] Debug - State keys: {list(state.keys())}")
-        print(f"[AZURE RETRIEVAL] Debug - sql_generation_status: {state.get('sql_generation_status', 'Not set')}")
-        print(f"[AZURE RETRIEVAL] Debug - Raw sql_validated from state: {state.get('sql_validated')}")
-        print(f"[AZURE RETRIEVAL] Debug - Raw generated_sql from state: {state.get('generated_sql', '')[:100] if state.get('generated_sql') else 'None'}")
-        
-        # Determine SQL to execute - check multiple sources
         sql_to_execute = ""
-        
+
         # Priority 1: Use validated generated SQL (from SQL generation or KPI editor)
         if sql_validated and generated_sql:
             sql_to_execute = generated_sql

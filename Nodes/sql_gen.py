@@ -1,23 +1,38 @@
 from typing import Dict, Any, List
 import os
+import sys
+
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+try:
+    from utils.logger import HirschbachLogger, log_node_initialization, log_node_execution, log_node_completion, log_error, log_debug, log_sql_generation
+except ImportError:
+    import logging
+    HirschbachLogger = None
+
 from langchain_openai import AzureChatOpenAI
 from Tools.entity_mapping_tool import EntityMappingTool
 
 class SQLGenerationNode:
     """Node for generating SQL queries using KPI editor pattern - analyze columns, get values, map intent, generate SQL"""
-    
+
     def __init__(self):
-            # Initialize Azure OpenAI
-            self.llm = AzureChatOpenAI(
-                azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o"),
-                azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-                api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-                api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-07-18"),
-                temperature=0.0
-            )
-            
-            # Initialize entity mapping tool
-            self.entity_tool = EntityMappingTool()
+        if HirschbachLogger:
+            self.logger = HirschbachLogger(__name__)
+        else:
+            self.logger = logging.getLogger(__name__)
+
+        self.llm = AzureChatOpenAI(
+            azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o"),
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-07-18"),
+            temperature=0.0
+        )
+
+        self.entity_tool = EntityMappingTool()
+
+        self.logger.node_initialized("SQL Generation Node initialized")
 
     def __call__(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -29,16 +44,16 @@ class SQLGenerationNode:
         Returns:
             Updated state with generated SQL
         """
-        print("[SQL GENERATION] Processing SQL generation...")
-        
+        self.logger.node_started("Processing SQL generation")
+
         # Get user input from the latest message (same pattern as KPI editor)
         messages = state.get("messages", [])
         if not messages:
-            print("[SQL GENERATION] No messages found")
+            self.logger.node_error("No messages found in state")
             state["sql_generation_status"] = "error"
             state["sql_generation_error"] = "No messages found in state"
             return state
-        
+
         # Get user input from the first HumanMessage (proper LangGraph pattern)
         user_query = ""
         for msg in messages:
@@ -46,13 +61,13 @@ class SQLGenerationNode:
                 if 'Human' in str(msg.__class__):
                     user_query = msg.content
                     break
-        
+
         if not user_query:
             # Fallback: use the last message
             user_query = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
-        
+
         if not user_query:
-            print("❌ [SQL GENERATION] No user query found in state")
+            self.logger.node_error("No user query found in state")
             state["sql_generation_status"] = "error"
             state["sql_generation_error"] = "No user query found in state"
             return state
@@ -61,12 +76,12 @@ class SQLGenerationNode:
         metadata_results = state.get("metadata_rag_results", [])
         llm_check_result = state.get("llm_check_result", {})
         
-        print(f"[SQL GENERATION] Debug - State keys: {list(state.keys())}")
-        print(f"[SQL GENERATION] Debug - Metadata results count: {len(metadata_results)}")
-        print(f"[SQL GENERATION] Debug - LLM check result: {llm_check_result}")
-        
+        self.logger.node_debug("State keys", list(state.keys()))
+        self.logger.node_debug("Metadata results count", len(metadata_results))
+        self.logger.node_debug("LLM check result", llm_check_result)
+
         if not metadata_results:
-            print("[SQL GENERATION] No metadata available for SQL generation")
+            self.logger.node_error("No metadata available for SQL generation")
             state["sql_generation_status"] = "error"
             state["sql_generation_error"] = "No metadata available for SQL generation"
             return state
@@ -95,15 +110,13 @@ class SQLGenerationNode:
                 "mapped_values": mapped_values
             }
             
-            print("✅ [SQL GENERATION] SQL generation completed successfully")
-            print(f"🔍 [SQL GENERATION] Generated SQL: {final_sql}")
-            print(f"🔍 [SQL GENERATION] Setting sql_validated = True")
-            print(f"🔍 [SQL GENERATION] State keys after update: {list(state.keys())}")
-            print(f"🔍 [SQL GENERATION] sql_validated value: {state.get('sql_validated')}")
+            self.logger.node_completed("SQL generation completed successfully")
+            log_sql_generation("sql_gen", final_sql)
+            self.logger.node_debug("State keys after update", list(state.keys()))
             return state
-            
+
         except Exception as e:
-            print(f"❌ [SQL GENERATION] Error: {str(e)}")
+            self.logger.node_error("SQL generation failed", e)
             state["sql_generation_status"] = "error"
             state["sql_generation_error"] = str(e)
             state["sql_generation_result"] = {
@@ -202,13 +215,13 @@ class SQLGenerationNode:
             for col in selected_columns:
                 if col in available_columns and col not in needed_columns:
                     needed_columns.append(col)
-                    print(f"🔧 [SQL_GEN] Selected column: {col}")
-            
+                    self.logger.node_debug(f"Selected column: {col}")
+
         except Exception as e:
-            print(f"⚠️ [SQL_GEN] Error analyzing needed columns: {str(e)}")
-        
+            self.logger.node_warning(f"Error analyzing needed columns: {str(e)}")
+
         if not needed_columns:
-            print("🔧 [SQL_GEN] No specific columns selected - will use query context")
+            self.logger.node_debug("No specific columns selected - will use query context")
         
         return needed_columns
     
@@ -225,9 +238,9 @@ class SQLGenerationNode:
                 if result and result.get("success", False):
                     values = result.get("values", [])
                     entity_data[column_name] = values
-                    print(f"🔧 [SQL_GEN] Added entity mapping for {column_name}: {values}")
+                    self.logger.node_debug(f"Added entity mapping for {column_name}: {values[:3]}{'...' if len(values) > 3 else ''}")
             except Exception as e:
-                print(f"⚠️ [SQL_GEN] Error getting values for {column_name}: {str(e)}")
+                self.logger.node_warning(f"Error getting values for {column_name}: {str(e)}")
         
         return entity_data
     
@@ -301,8 +314,8 @@ class SQLGenerationNode:
             response = self.llm.invoke(prompt)
             mapping_result = response.content.strip()
             
-            print(f"🔧 [SQL_GEN] Debug - LLM mapping response: {mapping_result}")
-            
+            self.logger.node_debug("LLM mapping response", mapping_result[:100] + "..." if len(mapping_result) > 100 else mapping_result)
+
             # Parse the mapping result
             mapped_values = {}
             for line in mapping_result.split('\n'):
@@ -310,20 +323,20 @@ class SQLGenerationNode:
                     column, values = line.split(':', 1)
                     column = column.strip()
                     values = values.strip()
-                    
+
                     if values != "unclear" and values != "none":
                         # Parse multiple values if comma-separated
                         value_list = [v.strip() for v in values.split(',') if v.strip()]
                         if value_list:
                             mapped_values[column] = value_list[0]  # Use first value for now
-                            print(f"🔧 [SQL_GEN] Mapped {column} to: {value_list[0]}")
+                            self.logger.node_debug(f"Mapped {column} to: {value_list[0]}")
                     else:
-                        print(f"⚠️ [SQL_GEN] Could not map {column} - unclear intent")
+                        self.logger.node_debug(f"Could not map {column} - unclear intent")
             
             return mapped_values
             
         except Exception as e:
-            print(f"⚠️ [SQL_GEN] Error mapping user intent to values: {str(e)}")
+            self.logger.node_warning(f"Error mapping user intent to values: {str(e)}")
             return {}
     
     def _generate_final_sql(self, user_query: str, needed_columns: List[str], metadata_results: List[Dict], mapped_values: Dict[str, str]) -> str:
@@ -344,14 +357,14 @@ class SQLGenerationNode:
                     formatted_columns.append(f"- {col_name} ({col_type}): {col_desc}")
             
             metadata_text = "\n".join(formatted_columns)
-            print(f"🔧 [SQL_GEN] Debug - Filtered columns for SQL generation: {needed_columns}")
-            print(f"🔧 [SQL_GEN] Debug - Formatted metadata text: {metadata_text}")
+            self.logger.node_debug("Filtered columns for SQL generation", needed_columns)
+            self.logger.node_debug("Formatted metadata text", metadata_text[:150] + "..." if len(metadata_text) > 150 else metadata_text)
         else:
             metadata_text = "No metadata available"
-        
+
         # Format mapped values
         values_text = ""
-        print(f"🔧 [SQL_GEN] Debug - Mapped values passed to SQL generation: {mapped_values}")
+        self.logger.node_debug("Mapped values passed to SQL generation", mapped_values)
         if mapped_values:
             values_text = f"CRITICAL: Use these EXACT mapped values (do not substitute or modify): {mapped_values}"
         
@@ -554,5 +567,5 @@ Return **ONLY** the SQL query. No explanations, no markdown code blocks, no addi
             return sql_query
             
         except Exception as e:
-            print(f"❌ [SQL_GEN] Error generating SQL: {str(e)}")
+            self.logger.node_error("Error generating SQL", e)
             return ""

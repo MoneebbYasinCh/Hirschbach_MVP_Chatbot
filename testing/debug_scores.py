@@ -16,20 +16,20 @@ load_dotenv()
 def debug_kpi_scores():
     """Debug the scoring issue in KPI retrieval"""
     
-    print("🔍 Debugging KPI Retrieval Scores")
+    print(" Debugging KPI Retrieval Scores")
     print("=" * 50)
     
     try:
         from Nodes.kpi_retrieval import KPIRetrievalNode
         
         # Initialize the node
-        print("📡 Initializing KPI Retrieval Node...")
+        print(" Initializing KPI Retrieval Node...")
         kpi_node = KPIRetrievalNode()
-        print("✅ Node initialized!")
+        print(" Node initialized!")
         
         # Test with a simple query
         test_query = "Show me claims in California"
-        print(f"\n🔍 Testing query: '{test_query}'")
+        print(f"\n Testing query: '{test_query}'")
         
         # Create a simple state
         mock_state = {
@@ -38,23 +38,23 @@ def debug_kpi_scores():
         }
         
         # Run the retrieval
-        print("\n📊 Running KPI retrieval...")
+        print("\n Running KPI retrieval...")
         result_state = kpi_node(mock_state)
         
         # Check results
         kpi_results = result_state.get("kpi_rag_results", [])
-        print(f"\n📈 Found {len(kpi_results)} KPIs")
+        print(f"\n Found {len(kpi_results)} KPIs")
         
         if kpi_results:
-            print("\n🎯 First KPI details:")
+            print("\n First KPI details:")
             first_kpi = kpi_results[0]
             for key, value in first_kpi.items():
                 print(f"   {key}: {value}")
         
-        print("\n✅ Debug completed!")
+        print("\n Debug completed!")
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f" Error: {e}")
         import traceback
         traceback.print_exc()
 

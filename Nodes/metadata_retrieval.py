@@ -255,7 +255,7 @@ class MetadataRetrievalNode:
         all_search_descriptions = targeted_descriptions
         
         if not all_search_descriptions:
-            print("⚠️ No search descriptions generated, falling back to basic metadata retrieval")
+            print(" No search descriptions generated, falling back to basic metadata retrieval")
             # Fallback: get some basic columns
             basic_columns = self._retrieve_metadata(task, 10)
             return basic_columns
@@ -283,15 +283,15 @@ class MetadataRetrievalNode:
                 except TimeoutError:
                     print(f"⏰ Timeout retrieving metadata for '{description}'")
                 except Exception as e:
-                    print(f"❌ Error retrieving metadata for '{description}': {e}")
+                    print(f" Error retrieving metadata for '{description}': {e}")
                     # Continue with other results even if one fails
         
-        print(f"✅ Completed {completed_searches}/{len(all_search_descriptions)} searches successfully")
+        print(f" Completed {completed_searches}/{len(all_search_descriptions)} searches successfully")
         
         # Deduplicate columns, keeping the one with highest score
         all_columns = self._deduplicate_columns(all_columns)
         
-        print(f"📈 Retrieved {len(all_columns)} unique columns")
+        print(f" Retrieved {len(all_columns)} unique columns")
         
         # Ensure Occurrence Date is always available (from actual metadata CSV)
         occurrence_date_exists = any(col.get('column_name') == 'Occurrence Date' for col in all_columns)
@@ -306,7 +306,7 @@ class MetadataRetrievalNode:
                 "foreign_key": ""
             }
             all_columns.append(occurrence_date_entry)
-            print("🔧 [METADATA RETRIEVAL] Added guaranteed Occurrence Date entry")
+            print(" [METADATA RETRIEVAL] Added guaranteed Occurrence Date entry")
         
         return all_columns
     
@@ -335,7 +335,7 @@ class MetadataRetrievalNode:
         
         # Print the retrieved columns
         if retrieved_columns:
-            print("📋 [METADATA RETRIEVAL] Retrieved columns:")
+            print(" [METADATA RETRIEVAL] Retrieved columns:")
             for i, col in enumerate(retrieved_columns, 1):
                 col_name = col.get('column_name', 'Unknown')
                 col_desc = col.get('description', 'No description')
@@ -343,7 +343,7 @@ class MetadataRetrievalNode:
                 col_score = col.get('score', 0)
                 print(f"  {i}. {col_name} ({col_type}) - {col_desc} (score: {col_score:.2f})")
         else:
-            print("⚠️ [METADATA RETRIEVAL] No columns retrieved")
+            print(" [METADATA RETRIEVAL] No columns retrieved")
         
         # Update state with results
         state["metadata_rag_results"] = retrieved_columns

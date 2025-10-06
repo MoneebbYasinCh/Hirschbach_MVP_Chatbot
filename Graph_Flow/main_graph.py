@@ -3,72 +3,82 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
 import logging
+import sys
+import os
 
-# Configure logging only if not already configured
-if not logging.getLogger().handlers:
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),  # Console output
-            logging.FileHandler('hirschbach_graph.log')  # File output
-        ]
-    )
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-# Import only the essential modules at top level
+try:
+    from utils.logger import HirschbachLogger, log_node_initialization, log_node_execution, log_node_completion, log_error
+except ImportError:
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.StreamHandler(),
+                logging.FileHandler('hirschbach_graph.log')
+            ]
+        )
+
 from State.main_state import HirschbachGraphState
 
 class StartNode:
     """Start node that initializes the conversation"""
-    
+
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
-    
+        try:
+            self.logger = HirschbachLogger(__name__)
+        except NameError:
+            # Fallback to basic logging
+            self.logger = logging.getLogger(__name__)
+
     def __call__(self, state: HirschbachGraphState) -> HirschbachGraphState:
         """
         Initialize the conversation state
-        
+
         Args:
             state: Current state
-            
+
         Returns:
             Updated state with initialization
         """
-        self.logger.info("[START NODE] Initializing Hirschbach Risk Intelligence conversation...")
-        print("[START NODE] Initializing Hirschbach Risk Intelligence conversation...")
-        
+        self.logger.node_initialized("Initializing Hirschbach Risk Intelligence conversation")
+
         # Ensure essential fields exist
         if "messages" not in state:
             state["messages"] = []
         if "workflow_status" not in state:
             state["workflow_status"] = "active"
-        
-        self.logger.info("[START NODE] State initialized successfully")
-        print("[START NODE] State initialized successfully")
+
+        self.logger.node_success("State initialized successfully")
         return state
 
 class EndNode:
     """End node that finalizes the conversation"""
-    
+
     def __init__(self):
-        self.logger = logging.getLogger(__name__)
-    
+        try:
+            self.logger = HirschbachLogger(__name__)
+        except NameError:
+            # Fallback to basic logging
+            self.logger = logging.getLogger(__name__)
+
     def __call__(self, state: HirschbachGraphState) -> HirschbachGraphState:
         """
         Finalize the conversation and prepare final response
-        
+
         Args:
             state: Current state
-            
+
         Returns:
             Updated state with finalization
         """
-        self.logger.info("[END NODE] Finalizing Hirschbach Risk Intelligence conversation...")
-        print("[END NODE] Finalizing Hirschbach Risk Intelligence conversation...")
-        
+        self.logger.node_started("Finalizing Hirschbach Risk Intelligence conversation")
+
         # Set workflow status to complete
         state["workflow_status"] = "complete"
-        
+
         # Generate final response if not already present
         if not state.get("final_response"):
             if state.get("error_message"):
@@ -78,14 +88,14 @@ class EndNode:
                 state["final_response"] = self._generate_risk_summary(state["aggregated_data"])
             else:
                 state["final_response"] = "I've completed processing your risk intelligence request."
-        
-        self.logger.info(f"[END NODE] Final response: {state['final_response'][:100]}...")
-        print(f"[END NODE] Final response: {state['final_response'][:100]}...")
-        
+
+        self.logger.node_processing("Generating final response", state['final_response'][:100] + "...")
+
         # Clear processing state while preserving essential data for UI
         self._clear_processing_state(state)
-        print("[END NODE] Cleared processing state for next query")
-        
+        self.logger.node_processing("Cleared processing state for next query")
+
+        self.logger.node_completed("Conversation finalized successfully")
         return state
     
     def _clear_processing_state(self, state: HirschbachGraphState) -> None:
@@ -138,8 +148,8 @@ class EndNode:
         for field in clear_fields:
             if field in state:
                 del state[field]
-                
-        print(f"[END NODE] Cleared {len(clear_fields)} processing fields, preserved {len(preserve_fields)} UI fields")
+
+        self.logger.node_debug(f"Cleared {len(clear_fields)} processing fields", f"Preserved {len(preserve_fields)} UI fields")
     
     def _generate_risk_summary(self, aggregated_data: List[Dict[str, Any]]) -> str:
         """
