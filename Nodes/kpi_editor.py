@@ -118,6 +118,10 @@ class KPIEditorNode:
                 print(f" [KPI_EDITOR] Modified SQL: {edited_sql}")
                 modifications = ["Modified SQL query to better match user requirements"]
             
+            # Store SQL query in history for context preservation
+            self._store_sql_in_history(state, task, edited_sql, "kpi_editor")
+            print(f"[KPI_EDITOR DEBUG] SQL history now has {len(state.get('sql_query_history', []))} entries")
+            
             return self._set_success_state(state, edited_sql, modifications)
             
         except Exception as e:
@@ -407,6 +411,32 @@ class KPIEditorNode:
         except Exception as e:
             print(f" [KPI_EDITOR] Error mapping user intent to values: {str(e)}")
             return {}
+    
+    def _store_sql_in_history(self, state: Dict[str, Any], user_query: str, sql_query: str, source: str) -> None:
+        """Store generated SQL query in conversation history for context preservation"""
+        if "sql_query_history" not in state:
+            state["sql_query_history"] = []
+        
+        # Create SQL history entry
+        sql_entry = {
+            "user_question": user_query,
+            "generated_sql": sql_query,
+            "source": source,  # "sql_generation" or "kpi_editor"
+            "timestamp": self._get_current_timestamp()
+        }
+        
+        state["sql_query_history"].append(sql_entry)
+        
+        # Keep only last 10 queries to avoid state bloat
+        if len(state["sql_query_history"]) > 10:
+            state["sql_query_history"] = state["sql_query_history"][-10:]
+        
+        print(f"[KPI_EDITOR] Stored SQL query in history: {user_query[:50]}...")
+    
+    def _get_current_timestamp(self) -> str:
+        """Get current timestamp for SQL history"""
+        from datetime import datetime
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     def _create_sql_generation_prompt_step3(self, task: str, kpi_metric: str, kpi_description: str, original_sql: str, metadata_results: List[Dict[str, Any]], mapped_values: Dict[str, Any], context_text: str = "") -> str:
         """Step 3: Create focused SQL generation prompt"""

@@ -36,9 +36,21 @@ class AzureRetrievalNode:
         top_kpi = state.get("top_kpi") or {}
 
         sql_generation_status = state.get("sql_generation_status", "")
+        sql_modification_completed = state.get("sql_modification_completed", False)
+        
+        # Debug: Check SQL modification state
+        print(f"[AZURE_RETRIEVAL DEBUG] sql_modification_completed: {sql_modification_completed}")
+        print(f"[AZURE_RETRIEVAL DEBUG] generated_sql length: {len(generated_sql) if generated_sql else 0}")
+        print(f"[AZURE_RETRIEVAL DEBUG] sql_validated (initial): {sql_validated}")
+        
         if sql_generation_status == "completed" and generated_sql:
             sql_validated = True
             self.logger.debug(f"Override: Setting sql_validated = True based on sql_generation_status")
+            print(f"[AZURE_RETRIEVAL DEBUG] Using SQL generation path")
+        elif sql_modification_completed and generated_sql:
+            sql_validated = True
+            self.logger.debug(f"Override: Setting sql_validated = True based on sql_modification_completed")
+            print(f"[AZURE_RETRIEVAL DEBUG] Using SQL modification path")
 
         self.logger.debug(f"sql_validated: {sql_validated}")
         self.logger.debug(f"generated_sql: {generated_sql[:100] if generated_sql else 'None'}")
@@ -59,6 +71,11 @@ class AzureRetrievalNode:
         elif isinstance(top_kpi, dict) and top_kpi.get("sql_query"):
             sql_to_execute = top_kpi.get("sql_query")
             print(f"[AZURE RETRIEVAL] Using KPI SQL: {sql_to_execute[:100]}...")
+            
+            # Store KPI SQL in history for context preservation
+            user_query = state.get("user_query", "")
+            if user_query:
+                self._store_sql_in_history(state, user_query, sql_to_execute, "kpi_direct")
         
         # Priority 3: Use any generated SQL (even if not validated)
         elif generated_sql:
@@ -263,3 +280,30 @@ class AzureRetrievalNode:
         except Exception as e:
             self.logger.error(f"Error getting table schema: {str(e)}")
             return None
+    
+    def _store_sql_in_history(self, state: Dict[str, Any], user_query: str, sql_query: str, source: str) -> None:
+        """Store generated SQL query in conversation history for context preservation"""
+        if "sql_query_history" not in state:
+            state["sql_query_history"] = []
+        
+        # Create SQL history entry
+        sql_entry = {
+            "user_question": user_query,
+            "generated_sql": sql_query,
+            "source": source,  # "sql_generation", "kpi_editor", or "kpi_direct"
+            "timestamp": self._get_current_timestamp()
+        }
+        
+        state["sql_query_history"].append(sql_entry)
+        
+        # Keep only last 10 queries to avoid state bloat
+        if len(state["sql_query_history"]) > 10:
+            state["sql_query_history"] = state["sql_query_history"][-10:]
+        
+        print(f"[AZURE_RETRIEVAL] Stored SQL query in history: {user_query[:50]}...")
+        print(f"[AZURE_RETRIEVAL DEBUG] SQL history now has {len(state.get('sql_query_history', []))} entries")
+    
+    def _get_current_timestamp(self) -> str:
+        """Get current timestamp for SQL history"""
+        from datetime import datetime
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")

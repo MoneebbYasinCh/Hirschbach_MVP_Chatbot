@@ -7,6 +7,9 @@ class HirschbachGraphState(TypedDict):
     messages: List[BaseMessage]  # Remove operator.add to prevent accumulation
     user_query: str  # Store the original user query
     
+    # SQL Query History for context preservation
+    sql_query_history: List[Dict[str, Any]]  # Store previous SQL queries and their context
+    
     # Main orchestration
     orchestration: Dict[str, Any]
     

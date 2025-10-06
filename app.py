@@ -48,9 +48,8 @@ def create_and_run_graph(user_input):
         content_preview = msg.content[:30] + "..." if len(msg.content) > 30 else msg.content
         print(f"[CONTEXT] Message {i+1}: {msg_type}: {content_preview}")
     
-    # Use unique thread ID for each conversation to avoid state accumulation
-    import time
-    thread_id = f"conversation_{int(time.time())}"
+    # Use consistent thread ID to preserve SQL query history across conversations
+    thread_id = "persistent_conversation"
     config = {"configurable": {"thread_id": thread_id}}
     
     inputs = {

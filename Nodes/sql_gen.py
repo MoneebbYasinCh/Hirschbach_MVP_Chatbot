@@ -127,6 +127,9 @@ class SQLGenerationNode:
                 "mapped_values": mapped_values
             }
             
+            # Store SQL query in history for context preservation
+            self._store_sql_in_history(state, user_query, final_sql, "sql_generation")
+            
             self.logger.node_completed("SQL generation completed successfully")
             log_sql_generation("sql_gen", final_sql)
             self.logger.node_debug("State keys after update", list(state.keys()))
@@ -597,3 +600,29 @@ Return **ONLY** the SQL query. No explanations, no markdown code blocks, no addi
         except Exception as e:
             self.logger.node_error("Error generating SQL", e)
             return ""
+    
+    def _store_sql_in_history(self, state: Dict[str, Any], user_query: str, sql_query: str, source: str) -> None:
+        """Store generated SQL query in conversation history for context preservation"""
+        if "sql_query_history" not in state:
+            state["sql_query_history"] = []
+        
+        # Create SQL history entry
+        sql_entry = {
+            "user_question": user_query,
+            "generated_sql": sql_query,
+            "source": source,  # "sql_generation" or "kpi_editor"
+            "timestamp": self._get_current_timestamp()
+        }
+        
+        state["sql_query_history"].append(sql_entry)
+        
+        # Keep only last 10 queries to avoid state bloat
+        if len(state["sql_query_history"]) > 10:
+            state["sql_query_history"] = state["sql_query_history"][-10:]
+        
+        print(f"[SQL_GEN] Stored SQL query in history: {user_query[:50]}...")
+    
+    def _get_current_timestamp(self) -> str:
+        """Get current timestamp for SQL history"""
+        from datetime import datetime
+        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
