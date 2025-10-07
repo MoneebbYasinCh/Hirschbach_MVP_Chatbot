@@ -68,7 +68,7 @@ class KPIEditorNode:
             needed_columns = self._analyze_needed_columns_step1(task, metadata_results, original_sql)
             
             # Step 2: Intelligently decide which columns need entity mapping
-            columns_needing_mapping = self._analyze_columns_needing_mapping(task, needed_columns)
+            columns_needing_mapping = self._analyze_columns_needing_mapping(task, needed_columns, state)
             
             # Step 3: Get exact values only for columns that need mapping
             entity_mapping_data = self._get_entity_mapping_data(columns_needing_mapping)
@@ -210,18 +210,42 @@ class KPIEditorNode:
         
         return needed_columns
     
-    def _analyze_columns_needing_mapping(self, task: str, needed_columns: List[str]) -> List[str]:
+    def _analyze_columns_needing_mapping(self, task: str, needed_columns: List[str], state: Dict[str, Any] = None) -> List[str]:
         """Intelligently decide which columns actually need entity mapping based on user request"""
         if not needed_columns:
             return []
-        
+
+        # Get column metadata to understand data types and relationships
+        column_metadata = {}
+        if state:
+            for col in needed_columns:
+                # Find metadata for this column to understand its data type and description
+                for meta in state.get("metadata_rag_results", []):
+                    if meta.get("column_name") == col:
+                        column_metadata[col] = {
+                            "data_type": meta.get("data_type", ""),
+                            "description": meta.get("description", "")
+                        }
+                        break
+
+        # Create intelligent prompt with column context
+        column_context = []
+        for col, meta in column_metadata.items():
+            column_context.append(f"- {col} ({meta['data_type']}): {meta['description']}")
+
         analysis_prompt = f"""
         User request: "{task}"
         
-        Available columns: {', '.join(needed_columns)}
+        Available columns with context:
+        {chr(10).join(column_context) if column_context else ', '.join(needed_columns)}
         
         CRITICAL: You MUST identify ANY specific constraints the user mentions, even if the main request seems generic.
-        
+
+        INCIDENT TYPE DETECTION (HIGH PRIORITY):
+        - When user mentions specific incident types like "crash", "cargo", "work comp", "Work Comp", look for columns that categorize incidents
+        - Common incident type columns: "Accident or Incident Code", "Incident Type", "Claim Type", "Category"
+        - If user asks for "crash claims", "cargo claims", "work comp claims" - this requires incident type filtering
+
         NEED SPECIFIC HANDLING if user mentions ANY of these:
         
         1. TEMPORAL CONSTRAINTS (ALWAYS needs specific handling):
@@ -230,10 +254,10 @@ class KPIEditorNode:
            - ANY time-based filtering requirement
         
         2. CATEGORICAL VALUES (specific values mentioned):
-           - Status: "closed", "open", "pending", "resolved" 
-           - Claim types: "Work Comp", "Cargo", "Crash", "Other"
-           - Customer codes: "ABC123", "XYZ789", specific customer names
-           - Locations: "Texas", "California", "North region", specific cities
+           - Status: "closed", "open", "pending", "resolved"
+           - Incident types: "crash", "cargo", "work comp", "Work Comp", "accident", "incident"
+           - Customer codes: specific customer names or codes
+           - Locations: "Texas", "California", "North region", specific cities, states
         
         3. NUMERIC FILTERS (value-based constraints):
            - "over $10k", "high-value", "expensive claims", "low-cost"
@@ -247,10 +271,17 @@ class KPIEditorNode:
         - Purely generic grouping: "show claims by type" (no specific values)
         - Generic aggregation: "group by status" (no specific status mentioned)
         - Generic counting: "count by customer" (no specific customer)
-        
+
+        CONTEXT-AWARE ANALYSIS:
+        - If user mentions "crash claims" → look for incident/accident categorization columns
+        - If user mentions "work comp claims" → look for worker compensation categorization
+        - If user mentions "cargo claims" → look for cargo/damage categorization
+        - Consider column descriptions to understand what each column represents
+
         REAL EXAMPLES FROM DATA:
         - "this month specifically" → Occurrence Date (temporal constraint)
         - "show closed claims" → Status Flag (categorical: "closed")
+        - "crash claims" → Accident or Incident Code (categorical: "Crash")
         - "Work Comp claims" → Accident or Incident Code (categorical: "Work Comp")
         - "claims in Texas" → Claim City (categorical: "Texas")
         - "high-value claims" → Actual Recovered Amount (numeric filter)
@@ -263,7 +294,8 @@ class KPIEditorNode:
 
         ANALYSIS FOR: "{task}"
         Look for ANY specific constraints, temporal references, exact values, or conditions mentioned.
-        
+        Pay special attention to incident type mentions like "crash", "cargo", "work comp".
+
         Return column names that need specific handling, separated by commas. If none, return "none".
         """
         
@@ -303,55 +335,67 @@ class KPIEditorNode:
         if not needed_columns:
             return {}
         
-        # Enhanced mapping prompt for temporal, numeric, and categorical logic
+        # Enhanced mapping prompt for temporal, numeric, categorical, and incident type logic
         prompt = f"""
         User request: "{task}"
         Columns: {', '.join(needed_columns)}
         Available values: {entity_mapping_data}
-        
+
         CRITICAL: Distinguish between FILTERING queries vs AGGREGATION queries:
-        
+
         === DO NOT MAP (Return "unclear" for these columns) ===
         If the query asks for comparison/aggregation across ALL entities:
         - Comparison keywords: "which", "what", "compare", "versus", "vs"
         - Aggregation keywords: "distribution of", "breakdown by", "for each", "by", "across"
         - Ranking keywords: "top", "lowest", "highest", "rank", "most", "least", "best", "worst"
         - Grouping keywords: "all", "every", "each type of", "group by"
-        
+
         Examples of when NOT to map:
         - "Which customer has the lowest sum?" → Do NOT map Customer Code (need all customers)
         - "What statuses have the most claims?" → Do NOT map Status Flag (need all statuses)
         - "Compare claims by type" → Do NOT map claim type (need all types)
         - "Distribution of claims across categories" → Do NOT map categories (need all)
-        
+
         === DO MAP (Return logic_type:value) ===
         Only map when user specifies EXACT entities/values to filter:
-        
+
         Map user intent to exact values and logic. Handle:
         1. Categorical values: "closed" → categorical:Closed
-        2. Temporal logic: "this month" → temporal:current_month
+        2. Temporal logic: "this month", "Q1 of 2024" → temporal:current_month or temporal:2024-Q1
         3. Numeric filters: "over $10k" → numeric:>10000
         4. Conditional logic: "critical" → conditional:1
-        
+        5. Incident types: "crash claims" → categorical:Crash, "work comp claims" → categorical:Work Comp
+
+        INCIDENT TYPE MAPPING (IMPORTANT):
+        - When user mentions "crash claims" → map to categorical:Crash
+        - When user mentions "cargo claims" → map to categorical:Cargo
+        - When user mentions "work comp claims" or "Work Comp claims" → map to categorical:Work Comp
+        - Look for incident categorization columns: "Accident or Incident Code", "Incident Type", "Claim Type"
+
         CODE/NAME PAIRS MAPPING RULE:
         - Prefer mapping values for CODE columns when a corresponding NAME column exists.
         - Do not map NAME values if a CODE value is available; use NAME only for display/NOT NULL checks.
-        
+
         Format: Column1: logic_type:value, Column2: logic_type:value
-        
+
         Examples of when TO map:
         - Status Flag: categorical:Closed (if user asks for "closed claims")
+        - Accident or Incident Code: categorical:Crash (if user asks for "crash claims")
+        - Accident or Incident Code: categorical:Work Comp (if user asks for "work comp claims")
         - Preventable Flag: categorical:P (if user asks for "preventable claims")
         - Occurrence Date: temporal:current_month (if user asks for "this month")
+        - Occurrence Date: temporal:2024-Q1 (if user asks for "Q1 of 2024")
         - Claim Amount: numeric:>10000 (if user asks for "over $10k")
         - Is Critical Flag: conditional:1 (if user asks for "critical claims")
-        
+
         Examples of when NOT to map (return "unclear"):
         - Customer Code: unclear (if user asks "which customer has lowest...")
         - Status Flag: unclear (if user asks "distribution by status")
-        
+        - Accident or Incident Code: unclear (if user asks "show claims by incident type")
+
         ANALYSIS FOR: "{task}"
         Does this ask to compare/aggregate across ALL values, or filter to specific values?
+        Pay special attention to incident type mentions like "crash", "cargo", "work comp".
         """
         
         try:
@@ -409,6 +453,20 @@ class KPIEditorNode:
                         logic_instructions.append(f"{column}: Add WHERE [{column}] >= DATEADD(week, -1, GETDATE())")
                     elif value == 'today':
                         logic_instructions.append(f"{column}: Add WHERE [{column}] = CAST(GETDATE() AS DATE)")
+                    elif value.startswith('2024-Q1') or value.startswith('2024-Q2') or value.startswith('2024-Q3') or value.startswith('2024-Q4'):
+                        # Handle quarter logic like "Q1 of 2024"
+                        year_quarter = value.split('-')
+                        if len(year_quarter) == 2:
+                            year = year_quarter[0]
+                            quarter = year_quarter[1][1:]  # Remove 'Q' prefix
+                            if quarter == '1':
+                                logic_instructions.append(f"{column}: Add WHERE [{column}] >= '{year}-01-01' AND [{column}] < '{year}-04-01'")
+                            elif quarter == '2':
+                                logic_instructions.append(f"{column}: Add WHERE [{column}] >= '{year}-04-01' AND [{column}] < '{year}-07-01'")
+                            elif quarter == '3':
+                                logic_instructions.append(f"{column}: Add WHERE [{column}] >= '{year}-07-01' AND [{column}] < '{year}-10-01'")
+                            elif quarter == '4':
+                                logic_instructions.append(f"{column}: Add WHERE [{column}] >= '{year}-10-01' AND [{column}] < '{int(year)+1}-01-01'")
                 elif logic_type == 'numeric':
                     logic_instructions.append(f"{column}: Add WHERE [{column}] {value}")
                 elif logic_type == 'conditional':
@@ -447,12 +505,19 @@ class KPIEditorNode:
         2. Add necessary WHERE clauses or other modifications
         3. Keep the original SELECT and FROM structure
         4. Only add the minimal changes needed to fulfill the user request
-        5. ALWAYS enforce NOT NULL conditions for EVERY column included in GROUP BY:
+        5. If adding a TOP clause, it must be placed immediately after SELECT (e.g., SELECT TOP 1)
+        6. ALWAYS enforce NOT NULL conditions for EVERY column included in GROUP BY:
            - ONLY use TRIM() on string types (varchar, nvarchar, char). Check data_type in metadata.
            - NEVER TRIM: date, datetime, int, decimal, bit, numeric, money columns.
            - String columns: WHERE TRIM([Column]) <> '' AND [Column] IS NOT NULL
            - Non-string columns: WHERE [Column] IS NOT NULL
         
+        INCIDENT TYPE FILTERING (IMPORTANT):
+        - When user mentions "crash claims", filter by [Accident or Incident Code] = 'Crash'
+        - When user mentions "work comp claims" or "Work Comp claims", filter by [Accident or Incident Code] = 'Work Comp'
+        - When user mentions "cargo claims", filter by [Accident or Incident Code] = 'Cargo'
+        - Apply incident type filters in addition to other WHERE conditions
+
         When deciding on which date column to use:
         If in the user request, it says something related to "open claims", use the column "Opened Date" for date filtering.
         If in the user request, it says something related to "closed claims", use the column "Close Date" for date filtering.
@@ -475,6 +540,9 @@ class KPIEditorNode:
         - ALL column names with spaces MUST be wrapped in square brackets: [Column Name]
         - Use proper SQL Server date functions: MONTH(), YEAR(), GETDATE()
         - For date filtering, use: WHERE ["any date column"] >= 'YYYY-MM-DD' AND ["any date column"] < 'YYYY-MM-DD'
+        - LIMIT, FETCH FIRST, and similar clauses are NOT valid syntax in SQL Server. Use only:
+          - For TOP N: SELECT TOP N ... FROM ... (must be first in SELECT clause)
+          - For OFFSET/FETCH: ... ORDER BY ... OFFSET X ROWS FETCH NEXT Y ROWS ONLY (requires ORDER BY)
 
         DEFAULT SORTING (unless the user specifies otherwise):
         - If the query has an aggregate metric or a date/time column in SELECT, ORDER BY that metric/date DESC.
