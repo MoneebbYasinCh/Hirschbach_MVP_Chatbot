@@ -475,7 +475,7 @@ When CODE and NAME column pairs exist (e.g., `[Entity Manager]` and `[Entity Man
 **REMEMBER:** CODE columns are unique identifiers for grouping. NAME columns are human-readable labels for display only.
 Apply this same pattern to ALL code/name column pairs.
 
-### Step 6: Apply CRITICAL Trend Analysis\MOM\YOY RULE
+### Step 6: Apply CRITICAL Trend Analysis\\MOM\\YOY RULE
 **Default Behavior when user mentions something like query to show trend analysis, MOM, YOY or upward/downward trend(ALWAYS follow unless explicitly overridden):**
 This is just a generic example for month on month analysis and for the number of claims and total reserve amounts change respectively.
 Only use the approach this example has and change it in whatever way the user asks for. But also change it if anything else is mentioned like claim type or something, just use logic and generate a new sql query.
