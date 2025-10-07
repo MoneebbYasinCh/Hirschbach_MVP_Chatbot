@@ -44,7 +44,7 @@ The platform uses a sophisticated multi-node architecture:
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/MoneebbYasinCh/Hirschbach_MVP_Chatbot.git
 cd Hirschbach_MVP_Chatbot
 ```
 
