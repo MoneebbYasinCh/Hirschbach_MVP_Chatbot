@@ -404,7 +404,7 @@ Analyze the user's request step-by-step and generate a SQL query that accurately
 - **Table Name**: Use `PRD.CLAIMS_SUMMARY`
 - **Column Names with Spaces**: Wrap in square brackets: `[Column Name]`
 - **Date Functions**: Use SQL Server functions like `DATEPART`, `YEAR`, `MONTH` instead of `DATE_TRUNC`
-- **NEVER filter by NAME column** - always filter by CODE column
+
 
 ### Step 3.5: CRITICAL SQL Server Syntax Requirements
 **LIMIT CLAUSE REPLACEMENT (CRITICAL):**
@@ -456,50 +456,60 @@ Apply this decision tree for date filtering:
 - If user mentions specific incident types (crash, accident, etc.) → Look for incident/code columns in available schema and filter accordingly
 - Match the user's terminology to the appropriate code column and values
 
-### Step 5: Apply Trend Analysis RULE
-When user mentions something like " Upward or downward trend respectively (group by day, week, month or year as per the prompt) " then use the following pattern:
+### Step 5: Apply CRITICAL COLUMN PAIR RULE
+When CODE and NAME column pairs exist (e.g., `[Entity Manager]` and `[Entity Manager Name]`):
 
-1. 
+1. **ALWAYS use CODE column** in `GROUP BY` clauses and NEVER the NAME column unless user explicitly requests it.
+2. **ALWAYS SELECT both** CODE and NAME columns for readability in SELECT clause.
+3. **Apply `IS NOT NULL`** to the NAME column AND in the CODE column if the column is not nullable.
+4. **Only use `TRIM()`** if NAME column is string type (check `data_type` in metadata)
+5. **NEVER filter by NAME column** - always filter by CODE column
 
         **Example Pattern:**
         ```
-        SELECT DATEPART(MONTH, [Occurrence Date]) as [Month],
-       COUNT(*) as [Current_Month],
-       LAG(COUNT(*)) OVER (ORDER BY DATEPART(MONTH, [Occurrence Date])) as [Previous_Month],
-       CASE WHEN COUNT(*) > LAG(COUNT(*)) OVER (ORDER BY DATEPART(MONTH, [Occurrence Date])) THEN 'Upward'
-            WHEN COUNT(*) < LAG(COUNT(*)) OVER (ORDER BY DATEPART(MONTH, [Occurrence Date])) THEN 'Downward'
-            ELSE 'No Change' END as [Trend]
-        FROM PRD.CLAIMS_SUMMARY
-        WHERE [Occurrence Date] >= DATEADD(MONTH, -12, GETDATE())
-        GROUP BY DATEPART(MONTH, [Occurrence Date])
-        ORDER BY [Month]
-        
+        WHERE [Entity Manager] = 'some_value'  -- Filter by CODE
+          AND [Entity Manager Name] IS NOT NULL  -- NULL check on NAME
+        GROUP BY [Entity Manager], [Entity Manager Name]
+        SELECT [Entity Manager], [Entity Manager Name]  -- Display both
         ```
-
-
-
-### Step 6: Apply CRITICAL GROUP BY RULE
-**Default Behavior (ALWAYS follow unless explicitly overridden):**
-- **ALWAYS use ONLY CODE columns in GROUP BY**
-- **NEVER use NAME columns in GROUP BY** (unless user explicitly requests grouping by name)
-- **SELECT both CODE and NAME** for display purposes
-- **CRITICAL:** NAME columns are for display only - they should NEVER appear in GROUP BY clauses
-
-        **Correct Pattern:**
-        ```
-        GROUP BY [Entity Code]
-        SELECT [Entity Code], [Entity Name]
-        ```
-
-        **WRONG Pattern (NEVER do this):**
-        ```
-        GROUP BY [Entity Code], [Entity Name]  -- ❌ WRONG! NAME columns don't belong in GROUP BY
-        ```
-
-**Exception:** Only group by NAME if user explicitly says "group by [name column]" or "group by name"
-
 **REMEMBER:** CODE columns are unique identifiers for grouping. NAME columns are human-readable labels for display only.
+Apply this same pattern to ALL code/name column pairs.
 
+### Step 6: Apply CRITICAL Trend Analysis\MOM\YOY RULE
+**Default Behavior when user mentions something like query to show trend analysis, MOM, YOY or upward/downward trend(ALWAYS follow unless explicitly overridden):**
+This is just a generic example for month on month analysis and for the number of claims and total reserve amounts change respectively.
+Only use the approach this example has and change it in whatever way the user asks for. But also change it if anything else is mentioned like claim type or something, just use logic and generate a new sql query.
+- 
+        **Example Pattern:**
+        ```
+            WITH Monthly_Claims AS (
+        SELECT
+            FORMAT([Occurrence Date], 'yyyy-MM') as Month,
+            YEAR([Occurrence Date]) as Year,
+            MONTH([Occurrence Date]) as Month_Number,
+            COUNT([Claim Number]) as Claims_Count,
+            SUM([Gross Reserve]) as Total_Reserve
+        FROM Warehouse.PRD.CLAIMS_SUMMARY
+        WHERE [Delete Flag] = 0 AND [Occurrence Date] IS NOT NULL
+        GROUP BY FORMAT([Occurrence Date], 'yyyy-MM'), YEAR([Occurrence Date]), MONTH([Occurrence Date])
+    )
+    SELECT
+        Month,
+        Claims_Count,
+        Total_Reserve,
+        LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number) as Previous_Month_Claims,
+        Claims_Count - LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number) as MoM_Change,
+        CASE
+            WHEN LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number) IS NULL THEN NULL
+            ELSE CAST((Claims_Count - LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number)) * 100.0 /
+                NULLIF(LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number), 0) AS DECIMAL(10,2))
+        END as MoM_Percentage_Change
+    FROM Monthly_Claims
+    ORDER BY Year DESC, Month_Number DESC;
+
+        ```
+
+              
 ### Step 7: Enforce Data Quality Filters
 Apply appropriate null and empty value filters based on data type:
 

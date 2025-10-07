@@ -171,8 +171,11 @@ DEFAULT: If unsure, choose IN_SCOPE.
         - If the KPI can answer the request exactly as-is, without any modifications: return "perfect_match"
         - If the KPI is relevant but needs ONLY minor modifications (adding a filter, changing date range): return "needs_minor_edit"  
         - If the KPI needs major changes (different grouping, different aggregation, different columns): return "not_relevant"
+        - If the KPI needs trend analysis, MOM, YOY or upward/downward trend: return "not_relevant"
         - If the KPI answers a completely different question: return "not_relevant"
-
+        
+        **IMPORTANT:** If the KPI needs trend analysis, MOM, YOY or upward/downward trend: ALWAYS return "not_relevant"
+        
         Return only one word: perfect_match, needs_minor_edit, or not_relevant
 
         For example (this is just one dummy example, there can be many other examples with variations):
