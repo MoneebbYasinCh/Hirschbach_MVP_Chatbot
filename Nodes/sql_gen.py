@@ -404,6 +404,7 @@ Analyze the user's request step-by-step and generate a SQL query that accurately
 - **Table Name**: Use `PRD.CLAIMS_SUMMARY`
 - **Column Names with Spaces**: Wrap in square brackets: `[Column Name]`
 - **Date Functions**: Use SQL Server functions like `DATEPART`, `YEAR`, `MONTH` instead of `DATE_TRUNC`
+- **NEVER filter by NAME column** - always filter by CODE column
 
 ### Step 3.5: CRITICAL SQL Server Syntax Requirements
 **LIMIT CLAUSE REPLACEMENT (CRITICAL):**
@@ -455,29 +456,27 @@ Apply this decision tree for date filtering:
 - If user mentions specific incident types (crash, accident, etc.) → Look for incident/code columns in available schema and filter accordingly
 - Match the user's terminology to the appropriate code column and values
 
-### Step 5: Apply CRITICAL COLUMN PAIR RULE
-When CODE and NAME column pairs exist (e.g., `[Entity Manager]` and `[Entity Manager Name]`):
+### Step 5: Apply Trend Analysis RULE
+When user mentions something like " Upward or downward trend respectively (group by day, week, month or year as per the prompt) " then use the following pattern:
 
-1. **ALWAYS use CODE column** in `GROUP BY` clauses and NEVER the NAME column unless user explicitly requests it.
-2. **ALWAYS SELECT both** CODE and NAME columns for readability in SELECT clause.
-3. **Apply `IS NOT NULL`** to the NAME column AND in the CODE column if the column is not nullable.
-4. **Only use `TRIM()`** if NAME column is string type (check `data_type` in metadata)
-5. **NEVER filter by NAME column** - always filter by CODE column
+1. 
 
         **Example Pattern:**
         ```
-        WHERE [Entity Manager] = 'some_value'  -- Filter by CODE
-          AND [Entity Manager Name] IS NOT NULL  -- NULL check on NAME
-        GROUP BY [Entity Manager]  -- Group by CODE ONLY (never group by NAME)
-        SELECT [Entity Manager], [Entity Manager Name]  -- Display both
+        SELECT DATEPART(MONTH, [Occurrence Date]) as [Month],
+       COUNT(*) as [Current_Month],
+       LAG(COUNT(*)) OVER (ORDER BY DATEPART(MONTH, [Occurrence Date])) as [Previous_Month],
+       CASE WHEN COUNT(*) > LAG(COUNT(*)) OVER (ORDER BY DATEPART(MONTH, [Occurrence Date])) THEN 'Upward'
+            WHEN COUNT(*) < LAG(COUNT(*)) OVER (ORDER BY DATEPART(MONTH, [Occurrence Date])) THEN 'Downward'
+            ELSE 'No Change' END as [Trend]
+        FROM PRD.CLAIMS_SUMMARY
+        WHERE [Occurrence Date] >= DATEADD(MONTH, -12, GETDATE())
+        GROUP BY DATEPART(MONTH, [Occurrence Date])
+        ORDER BY [Month]
+        
         ```
 
-        **WRONG Example (NEVER do this):**
-        ```
-        GROUP BY [Entity Manager], [Entity Manager Name]  -- ❌ WRONG! Don't group by NAME columns
-        ```
 
-Apply this same pattern to ALL code/name column pairs.
 
 ### Step 6: Apply CRITICAL GROUP BY RULE
 **Default Behavior (ALWAYS follow unless explicitly overridden):**
