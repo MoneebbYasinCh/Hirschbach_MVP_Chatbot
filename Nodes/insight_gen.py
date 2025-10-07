@@ -120,7 +120,7 @@ class InsightGenerationNode:
         
         # Create comprehensive prompt for insight generation
         insight_prompt = f"""
-        Analyze the following data and provide intelligent business insights for a transportation/logistics company.
+        Analyze the following data and provide intelligent business insights for a transportation/logistics company. Keep the tone really polite, calm and professional. You dont need to be too straight forward as you need to speak politely just like humans.
         
         CONTEXT:
         - User Query: "{user_query}"
