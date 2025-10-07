@@ -4,11 +4,8 @@ import operator
 
 class HirschbachGraphState(TypedDict):
     """State for Hirschbach Risk Intelligence workflow"""
-    messages: List[BaseMessage]  # Remove operator.add to prevent accumulation
+    messages: Annotated[List[BaseMessage], operator.add]
     user_query: str  # Store the original user query
-    
-    # SQL Query History for context preservation
-    sql_query_history: List[Dict[str, Any]]  # Store previous SQL queries and their context
     
     # Main orchestration
     orchestration: Dict[str, Any]

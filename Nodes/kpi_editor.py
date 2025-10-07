@@ -32,34 +32,17 @@ class KPIEditorNode:
             print("[KPI_EDITOR] No messages found")
             return self._set_error_state(state, "No messages found in state")
         
-        # Get user input and conversation context from messages
+        # Get user input from the first HumanMessage (proper LangGraph pattern)
         task = ""
-        conversation_context = []
-        human_messages = []
-        
-        # First, collect all messages and separate human messages
         for msg in messages:
             if hasattr(msg, 'content') and hasattr(msg, '__class__'):
                 if 'Human' in str(msg.__class__):
-                    human_messages.append(msg.content)
-                elif 'AI' in str(msg.__class__):
-                    # Include brief AI context
-                    ai_content = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
-                    conversation_context.append(f"Previous response: {ai_content}")
-        
-        # Current task is the LAST (most recent) human message
-        if human_messages:
-            task = human_messages[-1]  # Last human message is current task
-            # Previous human messages are context
-            for prev_msg in human_messages[:-1]:
-                conversation_context.append(f"Previous query: {prev_msg}")
+                    task = msg.content
+                    break
         
         if not task:
             # Fallback: use the last message
             task = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
-        
-        # Build context string for better KPI editing
-        context_text = "\n".join(conversation_context[-4:]) if conversation_context else ""  # Last 4 exchanges
         
         print(f" [KPI_EDITOR] Extracted task: '{task}'")
         
@@ -93,8 +76,8 @@ class KPIEditorNode:
             # Step 4: Map user intent to exact values (only for relevant columns)
             mapped_values = self._map_user_intent_to_values_step2(task, columns_needing_mapping, entity_mapping_data)
             
-            # Step 5: Generate final SQL with conversation context
-            prompt = self._create_sql_generation_prompt_step3(task, kpi_metric, kpi_description, original_sql, metadata_results, mapped_values, context_text)
+            # Step 5: Generate final SQL
+            prompt = self._create_sql_generation_prompt_step3(task, kpi_metric, kpi_description, original_sql, metadata_results, mapped_values)
             
             response = self.llm.invoke(prompt)
             edited_sql = response.content.strip()
@@ -117,10 +100,6 @@ class KPIEditorNode:
                 print(f" [KPI_EDITOR] Successfully modified KPI SQL")
                 print(f" [KPI_EDITOR] Modified SQL: {edited_sql}")
                 modifications = ["Modified SQL query to better match user requirements"]
-            
-            # Store SQL query in history for context preservation
-            self._store_sql_in_history(state, task, edited_sql, "kpi_editor")
-            print(f"[KPI_EDITOR DEBUG] SQL history now has {len(state.get('sql_query_history', []))} entries")
             
             return self._set_success_state(state, edited_sql, modifications)
             
@@ -412,33 +391,7 @@ class KPIEditorNode:
             print(f" [KPI_EDITOR] Error mapping user intent to values: {str(e)}")
             return {}
     
-    def _store_sql_in_history(self, state: Dict[str, Any], user_query: str, sql_query: str, source: str) -> None:
-        """Store generated SQL query in conversation history for context preservation"""
-        if "sql_query_history" not in state:
-            state["sql_query_history"] = []
-        
-        # Create SQL history entry
-        sql_entry = {
-            "user_question": user_query,
-            "generated_sql": sql_query,
-            "source": source,  # "sql_generation" or "kpi_editor"
-            "timestamp": self._get_current_timestamp()
-        }
-        
-        state["sql_query_history"].append(sql_entry)
-        
-        # Keep only last 10 queries to avoid state bloat
-        if len(state["sql_query_history"]) > 10:
-            state["sql_query_history"] = state["sql_query_history"][-10:]
-        
-        print(f"[KPI_EDITOR] Stored SQL query in history: {user_query[:50]}...")
-    
-    def _get_current_timestamp(self) -> str:
-        """Get current timestamp for SQL history"""
-        from datetime import datetime
-        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    def _create_sql_generation_prompt_step3(self, task: str, kpi_metric: str, kpi_description: str, original_sql: str, metadata_results: List[Dict[str, Any]], mapped_values: Dict[str, Any], context_text: str = "") -> str:
+    def _create_sql_generation_prompt_step3(self, task: str, kpi_metric: str, kpi_description: str, original_sql: str, metadata_results: List[Dict[str, Any]], mapped_values: Dict[str, Any]) -> str:
         """Step 3: Create focused SQL generation prompt"""
         
         # Format mapped values with logic types
@@ -480,16 +433,7 @@ class KPIEditorNode:
             metadata_text = "No metadata available"
         
         return f"""
-        CONVERSATION CONTEXT:
-        {context_text if context_text else "No previous conversation context."}
-        
         TASK: Modify the original SQL query to match the user request: "{task}"
-        
-        IMPORTANT: Consider the conversation context when making modifications. Look for:
-        - References to previous queries or results
-        - Follow-up questions that build on earlier requests
-        - Implied filters or conditions based on conversation history
-        
         CRITICAL: Answer with ONLY the SQL query. No explanations, no markdown, no code blocks, no additional text.
         Just the pure SQL statement.
         Original KPI: {kpi_metric}

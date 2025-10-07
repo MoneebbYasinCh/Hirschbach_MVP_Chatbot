@@ -50,12 +50,6 @@ class StartNode:
             state["messages"] = []
         if "workflow_status" not in state:
             state["workflow_status"] = "active"
-        if "sql_query_history" not in state:
-            state["sql_query_history"] = []
-        
-        # Debug: Check SQL query history on initialization
-        sql_history_count = len(state.get("sql_query_history", []))
-        print(f"[START_NODE DEBUG] SQL query history initialized with {sql_history_count} entries")
 
         self.logger.node_success("State initialized successfully")
         return state
@@ -111,31 +105,19 @@ class EndNode:
         Args:
             state: Current state to clean
         """
-        print(f"[END_NODE DEBUG] _clear_processing_state called")
-        print(f"[END_NODE DEBUG] State keys before clearing: {list(state.keys())}")
-        print(f"[END_NODE DEBUG] sql_modification_completed before: {state.get('sql_modification_completed')}")
-        print(f"[END_NODE DEBUG] generated_sql before: {len(state.get('generated_sql', ''))}")
-        # Fields to preserve for UI display AND CONTEXT PRESERVATION
+        # Fields to preserve for UI display
         preserve_fields = {
-            "messages",           # Chat history - CRITICAL for context preservation
+            "messages",           # Chat history
             "final_response",     # Final response for UI
             "azure_data",         # Data results for UI tables
             "generated_insights", # Insights for UI display
-            "workflow_status",    # Completion status
-            "user_query",         # Keep user query for context
-            "sql_query_history",  # SQL query history for context preservation
-            "sql_modification_request",  # SQL modification request for processing
-            "orchestration",      # Orchestration metadata
-            "sql_modification_completed",  # SQL modification completion status
-            "generated_sql",      # Generated/modified SQL query
-            "sql_validated",      # SQL validation status
-            "top_kpi"            # Top KPI (may contain modified SQL)
+            "workflow_status"     # Completion status
         }
         
         # Fields to clear (processing state)
         clear_fields = [
-            # Query processing (keep user_query for context)
-            "task", "orchestrator_decision",
+            # Query processing
+            "user_query", "task", "orchestrator_decision",
             
             # KPI processing
             "kpi_retrieval_completed", "top_kpi", "kpi_rag_results",
@@ -243,10 +225,6 @@ def create_main_graph():
         from Nodes.insight_gen import InsightGenerationNode
         return InsightGenerationNode()
     
-    def get_sql_modifier():
-        from Nodes.sql_modifier import SQLModifierNode
-        return SQLModifierNode()
-    
     # Add all nodes
     workflow.add_node("start", start_node)
     workflow.add_node("orchestrator", get_orchestrator())
@@ -255,7 +233,6 @@ def create_main_graph():
     workflow.add_node("llm_checker", get_llm_checker())
     workflow.add_node("kpi_editor", get_kpi_editor())
     workflow.add_node("sql_generation", get_sql_generation())
-    workflow.add_node("sql_modifier", get_sql_modifier())
     workflow.add_node("azure_retrieval", get_azure_retrieval())
     workflow.add_node("insight_generation", get_insight_generation())
     workflow.add_node("end", end_node)
@@ -272,11 +249,6 @@ def create_main_graph():
         workflow_status = state.get("workflow_status", "active")
         if workflow_status == "complete":
             return "end"
-        
-        # Check if this is a SQL modification request
-        orchestration = state.get("orchestration", {})
-        if orchestration.get("decision") == "sql_modification":
-            return "sql_modifier"
         else:
             return "kpi_retrieval"  # Start with KPI retrieval
     
@@ -285,7 +257,6 @@ def create_main_graph():
         route_after_orchestrator,
         {
             "kpi_retrieval": "kpi_retrieval",
-            "sql_modifier": "sql_modifier",
             "end": "end"
         }
     )
@@ -329,9 +300,6 @@ def create_main_graph():
     
     # SQL generation flows to Azure retrieval
     workflow.add_edge("sql_generation", "azure_retrieval")
-    
-    # SQL modifier flows to Azure retrieval
-    workflow.add_edge("sql_modifier", "azure_retrieval")
     
     # Azure retrieval flows to insight generation
     workflow.add_edge("azure_retrieval", "insight_generation")

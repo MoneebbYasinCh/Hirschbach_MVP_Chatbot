@@ -54,34 +54,17 @@ class SQLGenerationNode:
             state["sql_generation_error"] = "No messages found in state"
             return state
 
-        # Get user input from the LAST HumanMessage (most recent query)
+        # Get user input from the first HumanMessage (proper LangGraph pattern)
         user_query = ""
-        conversation_context = []
-        human_messages = []
-        
-        # First, collect all messages and separate human messages
         for msg in messages:
             if hasattr(msg, 'content') and hasattr(msg, '__class__'):
                 if 'Human' in str(msg.__class__):
-                    human_messages.append(msg.content)
-                elif 'AI' in str(msg.__class__):
-                    # Include relevant AI responses for context
-                    ai_content = msg.content[:100] + "..." if len(msg.content) > 100 else msg.content
-                    conversation_context.append(f"Previous response: {ai_content}")
-        
-        # Current query is the LAST (most recent) human message
-        if human_messages:
-            user_query = human_messages[-1]  # Last human message is current query
-            # Previous human messages are context
-            for prev_msg in human_messages[:-1]:
-                conversation_context.append(f"Previous query: {prev_msg}")
+                    user_query = msg.content
+                    break
 
         if not user_query:
             # Fallback: use the last message
             user_query = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
-        
-        # Build context string for better SQL generation
-        context_text = "\n".join(conversation_context[-6:]) if conversation_context else ""  # Last 6 exchanges
 
         if not user_query:
             self.logger.node_error("No user query found in state")
@@ -113,8 +96,8 @@ class SQLGenerationNode:
             # Step 3: Map user intent to exact values
             mapped_values = self._map_user_intent_to_values(user_query, needed_columns, entity_mapping_data)
             
-            # Step 4: Generate final SQL with exact values and conversation context
-            final_sql = self._generate_final_sql(user_query, needed_columns, metadata_results, mapped_values, context_text)
+            # Step 4: Generate final SQL with exact values
+            final_sql = self._generate_final_sql(user_query, needed_columns, metadata_results, mapped_values)
             
             # Update state
             state["sql_generation_status"] = "completed"
@@ -126,9 +109,6 @@ class SQLGenerationNode:
                 "needed_columns": needed_columns,
                 "mapped_values": mapped_values
             }
-            
-            # Store SQL query in history for context preservation
-            self._store_sql_in_history(state, user_query, final_sql, "sql_generation")
             
             self.logger.node_completed("SQL generation completed successfully")
             log_sql_generation("sql_gen", final_sql)
@@ -359,7 +339,7 @@ class SQLGenerationNode:
             self.logger.node_warning(f"Error mapping user intent to values: {str(e)}")
             return {}
     
-    def _generate_final_sql(self, user_query: str, needed_columns: List[str], metadata_results: List[Dict], mapped_values: Dict[str, str], context_text: str = "") -> str:
+    def _generate_final_sql(self, user_query: str, needed_columns: List[str], metadata_results: List[Dict], mapped_values: Dict[str, str]) -> str:
         """Generate final SQL with exact values (like KPI editor)"""
         
         # Format metadata for prompt - ONLY use needed columns
@@ -398,17 +378,8 @@ You are an expert SQL query generator specializing in SQL Server syntax. Your ta
 - Do NOT substitute similar-sounding column names
 - Use the EXACT column names provided - no substitutions or variations
 
-## CONVERSATION CONTEXT
-{context_text if context_text else "No previous conversation context available."}
-
 ## Your Mission
 Analyze the user's request step-by-step and generate a SQL query that accurately fulfills their requirements while adhering to all formatting, filtering, and structural rules defined below.
-
-IMPORTANT: Consider the conversation context when interpreting the user's request. Look for:
-- References to previous queries or results
-- Follow-up questions that build on earlier requests
-- Implied filters or conditions based on conversation history
-- Context clues that help clarify ambiguous requests
 
 ---
 
@@ -416,10 +387,8 @@ IMPORTANT: Consider the conversation context when interpreting the user's reques
 
 ### Step 1: Understand the User Request
 - Parse the **USER REQUEST**: "{user_query}"
-- Consider the **CONVERSATION CONTEXT** above for additional clarity
 - Identify what data the user wants to retrieve
 - Determine any filtering conditions, aggregations, or groupings needed
-- Look for context-dependent references (e.g., "that data", "those results", "also show")
 
         ### Step 2: Review Available Schema
         - **AVAILABLE COLUMNS**: {metadata_text}
@@ -600,29 +569,3 @@ Return **ONLY** the SQL query. No explanations, no markdown code blocks, no addi
         except Exception as e:
             self.logger.node_error("Error generating SQL", e)
             return ""
-    
-    def _store_sql_in_history(self, state: Dict[str, Any], user_query: str, sql_query: str, source: str) -> None:
-        """Store generated SQL query in conversation history for context preservation"""
-        if "sql_query_history" not in state:
-            state["sql_query_history"] = []
-        
-        # Create SQL history entry
-        sql_entry = {
-            "user_question": user_query,
-            "generated_sql": sql_query,
-            "source": source,  # "sql_generation" or "kpi_editor"
-            "timestamp": self._get_current_timestamp()
-        }
-        
-        state["sql_query_history"].append(sql_entry)
-        
-        # Keep only last 10 queries to avoid state bloat
-        if len(state["sql_query_history"]) > 10:
-            state["sql_query_history"] = state["sql_query_history"][-10:]
-        
-        print(f"[SQL_GEN] Stored SQL query in history: {user_query[:50]}...")
-    
-    def _get_current_timestamp(self) -> str:
-        """Get current timestamp for SQL history"""
-        from datetime import datetime
-        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")

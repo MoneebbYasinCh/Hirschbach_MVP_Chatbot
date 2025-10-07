@@ -12,6 +12,7 @@ graph TD;
 	llm_checker(llm_checker)
 	kpi_editor(kpi_editor)
 	sql_generation(sql_generation)
+	sql_modifier(sql_modifier)
 	azure_retrieval(azure_retrieval)
 	insight_generation(insight_generation)
 	end(end)
@@ -28,7 +29,9 @@ graph TD;
 	metadata_retrieval --> llm_checker;
 	orchestrator -.-> end;
 	orchestrator -.-> kpi_retrieval;
+	orchestrator -.-> sql_modifier;
 	sql_generation --> azure_retrieval;
+	sql_modifier --> azure_retrieval;
 	start --> orchestrator;
 	end --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2

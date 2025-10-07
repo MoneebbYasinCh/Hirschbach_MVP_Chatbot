@@ -86,25 +86,6 @@ class KPIRetrievalNode:
         
         return kpi_results
     
-    def _enhance_query_with_context(self, user_query: str, messages: List) -> str:
-        """Enhance follow-up queries with context from previous data requests"""
-        # Check if this is a follow-up question
-        follow_up_phrases = ["tell me more", "more about", "expand on", "give me more", "show me more", "details about"]
-        
-        if any(phrase in user_query.lower() for phrase in follow_up_phrases):
-            # Look for the most recent data-related query in conversation
-            data_keywords = ["show", "get", "find", "claims", "data", "report", "analyze", "trends", "accident"]
-            
-            for msg in reversed(messages):
-                if hasattr(msg, 'content') and hasattr(msg, '__class__'):
-                    if 'Human' in str(msg.__class__):
-                        content = msg.content.lower()
-                        if any(keyword in content for keyword in data_keywords):
-                            print(f"[KPI RETRIEVAL] Enhanced follow-up query with context: {msg.content}")
-                            return f"{msg.content} - {user_query}"  # Combine previous context with current query
-        
-        return user_query
-    
     def __call__(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """Retrieve relevant KPIs from KPI RAG for claims_summary analysis"""
         # Get user query from state (preferred) or fallback to last message
@@ -120,15 +101,10 @@ class KPIRetrievalNode:
             print("No user query found for KPI retrieval")
             return state
         
-        # Enhance query with conversation context for follow-up questions
-        enhanced_query = self._enhance_query_with_context(user_query, state.get("messages", []))
-        
         print(f"[KPI RETRIEVAL] Processing query: {user_query}")
-        if enhanced_query != user_query:
-            print(f"[KPI RETRIEVAL] Using enhanced query: {enhanced_query}")
         
-        # Retrieve top 3 KPIs from Azure AI Search using enhanced query
-        kpi_results = self._retrieve_kpis(enhanced_query, top_k=3)
+        # Retrieve top 3 KPIs from Azure AI Search
+        kpi_results = self._retrieve_kpis(user_query, top_k=3)
         
         if kpi_results:
             print(f"[KPI RETRIEVAL] Found {len(kpi_results)} relevant KPIs")
