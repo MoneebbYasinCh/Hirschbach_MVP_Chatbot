@@ -21,38 +21,23 @@ class LLMCheckerNode:
         Returns a decision type that determines the next path in the workflow.
         """
         
-        # Get user input and conversation context
+        # Get user input - prioritize user_query from state over messages
         task = state.get("user_query", "")
-        conversation_context = []
-        messages = state.get("messages", [])
-        human_messages = []
-        
-        if not task and messages:
-            # Collect all messages and separate human messages
-            for msg in messages:
-                if hasattr(msg, 'content') and hasattr(msg, '__class__'):
-                    if 'Human' in str(msg.__class__):
-                        human_messages.append(msg.content)
-                    elif 'AI' in str(msg.__class__):
-                        # Include brief AI context
-                        ai_content = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
-                        conversation_context.append(f"Response: {ai_content}")
-            
-            # Current task is the LAST (most recent) human message
-            if human_messages:
-                task = human_messages[-1]  # Last human message is current task
-                # Previous human messages are context
-                for prev_msg in human_messages[:-1]:
-                    conversation_context.append(f"Previous: {prev_msg}")
-            
-            if not task:
-                # Last resort: use the last message
-                task = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
-        elif not task:
-            task = state.get("task", "")
-        
-        # Build context string for better decision making
-        context_text = "\n".join(conversation_context[-4:]) if conversation_context else ""  # Last 4 exchanges
+        if not task:
+            # Fallback: Find the first HumanMessage in messages
+            messages = state.get("messages", [])
+            if messages:
+                # Look for the first human message (user's actual query)
+                for msg in messages:
+                    if hasattr(msg, 'content') and hasattr(msg, '__class__'):
+                        if 'Human' in str(msg.__class__):
+                            task = msg.content
+                            break
+                if not task:
+                    # Last resort: use the last message
+                    task = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
+            else:
+                task = state.get("task", "")
 
         # Confidence-based scope check - permissive by default
         try:
@@ -173,29 +158,24 @@ DEFAULT: If unsure, choose IN_SCOPE.
         kpi_description = top_kpi.get("description", "")
         kpi_sql = top_kpi.get("sql_query", "")
         
-        # Context-aware prompt for better decision making
+        # Simple, clean prompt - let the LLM decide naturally
         prompt = f"""
-        CONVERSATION CONTEXT:
-        {context_text if context_text else "No previous conversation context."}
-        
-        CURRENT USER REQUEST: "{task}"
+        USER REQUEST: "{task}"
         
         KPI NAME: "{kpi_metric}"
         KPI DESCRIPTION: {kpi_description}
         KPI SQL: {kpi_sql}
 
-        Can this KPI completely answer the user's request? Consider the conversation context when making your decision.
-
-        IMPORTANT: Look for context clues that might affect the decision:
-        - Follow-up questions that build on previous requests
-        - References to previous data or results
-        - Implied filters or modifications based on conversation history
+        Can this KPI completely answer the user's request?
 
         - If the KPI can answer the request exactly as-is, without any modifications: return "perfect_match"
-        - If the KPI is relevant but needs ONLY minor modifications (adding a filter, changing date range, context-based adjustments): return "needs_minor_edit"  
+        - If the KPI is relevant but needs ONLY minor modifications (adding a filter, changing date range): return "needs_minor_edit"  
         - If the KPI needs major changes (different grouping, different aggregation, different columns): return "not_relevant"
+        - If the KPI needs trend analysis, MOM, YOY or upward/downward trend: return "not_relevant"
         - If the KPI answers a completely different question: return "not_relevant"
-
+        
+        **IMPORTANT:** If the KPI needs trend analysis, MOM, YOY or upward/downward trend: ALWAYS return "not_relevant"
+        
         Return only one word: perfect_match, needs_minor_edit, or not_relevant
 
         For example (this is just one dummy example, there can be many other examples with variations):

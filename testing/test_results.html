@@ -1,0 +1,233 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hirschbach Agent SQL Generation Test Results</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+        }
+        .stat-box {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+            flex: 1;
+            margin: 0 10px;
+        }
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .stat-label {
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th:nth-child(1), td:nth-child(1) { width: 20%; }
+        th:nth-child(2), td:nth-child(2) { width: 22.5%; }
+        th:nth-child(3), td:nth-child(3) { width: 22.5%; }
+        th:nth-child(4), td:nth-child(4) { width: 25%; }
+        th {
+            background-color: #000000;
+            color: white;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        tr:hover {
+            background-color: #e8f4f8;
+        }
+        .status-success {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .status-failed {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .status-error {
+            color: #f39c12;
+            font-weight: bold;
+        }
+        .sql-code {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            background-color: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .prompt-text {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .running {
+            background-color: #fff3cd !important;
+            border-left: 4px solid #ffc107;
+        }
+        .completed {
+            background-color: #d1ecf1 !important;
+            border-left: 4px solid #17a2b8;
+        }
+        .data-table-container {
+            max-height: 300px;
+            width: 100%;
+            overflow: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+        }
+        .data-table {
+            width: 100%;
+            min-width: 300px;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+        .data-table th {
+            background-color: #f8f9fa;
+            color: black;
+            padding: 8px 12px;
+            text-align: left;
+            font-weight: bold;
+            border-bottom: 2px solid #dee2e6;
+            position: sticky;
+            top: 0;
+        }
+        .data-table td {
+            padding: 6px 12px;
+            border-bottom: 1px solid #dee2e6;
+            min-width: 80px;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .data-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        .data-table tr:hover {
+            background-color: #e8f4f8;
+        }
+        .no-data {
+            color: #6c757d;
+            font-style: italic;
+            text-align: center;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Hirschbach AI Agent SQL Generation Test Results</h1>
+        <p>Test results comparing expected vs generated SQL queries and their data results</p>
+    </div>
+
+    <div class="stats">
+        <div class="stat-box">
+            <div class="stat-number" id="total-tests">1</div>
+            <div class="stat-label">Total Tests</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-number" id="sql-generated">1</div>
+            <div class="stat-label">SQL Generated</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-number" id="failed">0</div>
+            <div class="stat-label">Failed</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-number" id="errors">0</div>
+            <div class="stat-label">Errors</div>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 15%;">Prompt</th>
+                <th style="width: 18%;">Expected SQL Query</th>
+                <th style="width: 18%;">Generated SQL Query</th>
+                <th style="width: 24%;">Expected Data Results</th>
+                <th style="width: 25%;">Generated Data Results</th>
+            </tr>
+        </thead>
+        <tbody id="test-results-body">
+            <tr class="completed">
+                <td class="prompt-text">Please give me count of all the critical claims for this month</td>
+                <td><div class="sql-code">SELECT COUNT(*) AS CriticalCount FROM prd.claims_summary WHERE CriticalOrMinor = 'Critical' and MONTH([Occurrence Date]) = MONTH(GETDATE()) and YEAR([Occurrence Date]) = YEAR(GETDATE())</div></td>
+                <td>
+                    <div class="sql-code">SELECT COUNT(DISTINCT [Claim Number]) AS [Claims Count]
+FROM PRD.CLAIMS_SUMMARY
+WHERE [Is Critical Flag] = 1 
+AND [Occurrence Date] >= DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()), 0) 
+AND [Occurrence Date] < DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()) + 1, 0)</div>
+                    
+                    
+                </td>
+                <td><div class="data-table-container"><table class="data-table"><thead><tr><th>CriticalCount</th></tr></thead><tbody><tr><td>18</td></tr></tbody></table></div></td>
+                <td><div class="data-table-container"><table class="data-table"><thead><tr><th>Claims Count</th></tr></thead><tbody><tr><td>18</td></tr></tbody></table></div></td>
+            </tr>
+
+            <tr class="completed">
+                <td class="prompt-text">Can you please provide me the number of preventable claims for the current month?</td>
+                <td><div class="sql-code">SELECT COUNT(*) AS [Preventable Claims Count] FROM prd.CLAIMS_SUMMARY WHERE [Preventable Flag] = 1 AND MONTH([Occurrence Date]) = MONTH(GETDATE()) AND YEAR([Occurrence Date]) = YEAR(GETDATE());</div></td>
+                <td>
+                    <div class="sql-code">SELECT
+    FORMAT([Occurrence Date], 'yyyy-MM') as Month,
+    COUNT(*) as Count_Value,
+    LAG(COUNT(*), 1) OVER (ORDER BY YEAR([Occurrence Date]), MONTH([Occurrence Date])) as Prev_Value,
+    COUNT(*) - LAG(COUNT(*), 1) OVER (ORDER BY YEAR([Occurrence Date]), MONTH([Occurrence Date])) as Change,
+    CAST((COUNT(*) - LAG(COUNT(*), 1) OVER (ORDER BY YEAR([Occurrence Date]), MONTH([Occurrence Date]))) * 100.0
+         / NULLIF(LAG(COUNT(*), 1) OVER (ORDER BY YEAR([Occurrence Date]), MONTH([Occurrence Date])), 0) AS DECIMAL(10,2)) as Pct_Change
+FROM PRD.CLAIMS_SUMMARY
+WHERE [Occurrence Date] IS NOT NULL
+AND [Preventable Flag] = 'P'
+GROUP BY FORMAT([Occurrence Date], 'yyyy-MM'), YEAR([Occurrence Date]), MONTH([Occurrence Date])
+ORDER BY YEAR([Occurrence Date]) DESC, MONTH([Occurrence Date]) DESC;</div>
+                    
+                    
+                </td>
+                <td><div class="no-data">No data retrieved</div></td>
+                <td><div class="data-table-container"><table class="data-table"><thead><tr><th>Month</th><th>Count_Value</th><th>Prev_Value</th><th>Change</th><th>Pct_Change</th></tr></thead><tbody><tr><td>2025-10</td><td>14</td><td>94</td><td>-80</td><td>-85.11</td></tr><tr><td>2025-09</td><td>94</td><td>92</td><td>2</td><td>2.17</td></tr><tr><td>2025-08</td><td>92</td><td>108</td><td>-16</td><td>-14.81</td></tr><tr><td>2025-07</td><td>108</td><td>121</td><td>-13</td><td>-10.74</td></tr><tr><td>2025-06</td><td>121</td><td>110</td><td>11</td><td>10.00</td></tr></tbody></table></div></td>
+            </tr>
+
+        </tbody>
+    </table>
+</body>
+</html>

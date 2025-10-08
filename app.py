@@ -246,6 +246,16 @@ def main():
             st.session_state.messages = []
             if hasattr(st.session_state, 'last_result'):
                 del st.session_state.last_result
+            
+            # Clear the orchestrator's conversation history as well
+            try:
+                from Graph_Flow.main_graph import get_global_orchestrator
+                orchestrator = get_global_orchestrator()
+                orchestrator.clear_conversation_history()
+                print("[APP DEBUG] Cleared orchestrator conversation history")
+            except Exception as e:
+                print(f"[APP DEBUG] Error clearing orchestrator history: {e}")
+            
             st.rerun()
     
     # Chat container

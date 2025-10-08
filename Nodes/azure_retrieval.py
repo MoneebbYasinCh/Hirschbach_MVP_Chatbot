@@ -61,23 +61,40 @@ class AzureRetrievalNode:
         self.logger.debug(f"Raw generated_sql from state: {state.get('generated_sql', '')[:100] if state.get('generated_sql') else 'None'}")
         
         sql_to_execute = ""
-
-        # Priority 1: Use validated generated SQL (from SQL generation or KPI editor)
-        if sql_validated and generated_sql:
-            sql_to_execute = generated_sql
-            print(f"[AZURE RETRIEVAL] Using validated generated SQL: {sql_to_execute[:100]}...")
         
-        # Priority 2: Use KPI SQL directly (perfect match scenario)
-        elif isinstance(top_kpi, dict) and top_kpi.get("sql_query"):
+        # Check if LLM Checker decided this is a perfect match
+        llm_check_result = state.get("llm_check_result", {})
+        is_perfect_match = llm_check_result.get("decision_type") == "perfect_match"
+        
+        print(f"[AZURE_RETRIEVAL DEBUG] LLM decision: {llm_check_result.get('decision_type', 'None')}")
+        print(f"[AZURE_RETRIEVAL DEBUG] Is perfect match: {is_perfect_match}")
+
+        # Priority 1: Use KPI SQL directly for perfect match scenarios (HIGHEST PRIORITY)
+        if is_perfect_match and isinstance(top_kpi, dict) and top_kpi.get("sql_query"):
             sql_to_execute = top_kpi.get("sql_query")
-            print(f"[AZURE RETRIEVAL] Using KPI SQL: {sql_to_execute[:100]}...")
+            print(f"[AZURE RETRIEVAL] Using KPI SQL (perfect match): {sql_to_execute[:100]}...")
             
             # Store KPI SQL in history for context preservation
             user_query = state.get("user_query", "")
             if user_query:
                 self._store_sql_in_history(state, user_query, sql_to_execute, "kpi_direct")
         
-        # Priority 3: Use any generated SQL (even if not validated)
+        # Priority 2: Use validated generated SQL (from SQL generation or KPI editor)
+        elif sql_validated and generated_sql:
+            sql_to_execute = generated_sql
+            print(f"[AZURE RETRIEVAL] Using validated generated SQL: {sql_to_execute[:100]}...")
+        
+        # Priority 3: Use KPI SQL as fallback (if not perfect match but still available)
+        elif isinstance(top_kpi, dict) and top_kpi.get("sql_query"):
+            sql_to_execute = top_kpi.get("sql_query")
+            print(f"[AZURE RETRIEVAL] Using KPI SQL (fallback): {sql_to_execute[:100]}...")
+            
+            # Store KPI SQL in history for context preservation
+            user_query = state.get("user_query", "")
+            if user_query:
+                self._store_sql_in_history(state, user_query, sql_to_execute, "kpi_direct")
+        
+        # Priority 4: Use any generated SQL (even if not validated)
         elif generated_sql:
             sql_to_execute = generated_sql
             print(f"[AZURE RETRIEVAL] Using unvalidated generated SQL: {sql_to_execute[:100]}...")

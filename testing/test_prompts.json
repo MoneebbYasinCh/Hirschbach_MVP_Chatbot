@@ -1,0 +1,182 @@
+[
+  {
+    "Prompt": "Can you please provide me the number of preventable claims for the current month?",
+    "Query": "SELECT COUNT(*) AS [Preventable Claims Count] FROM prd.CLAIMS_SUMMARY WHERE [Preventable Flag] = 1 AND MONTH([Occurrence Date]) = MONTH(GETDATE()) AND YEAR([Occurrence Date]) = YEAR(GETDATE());"
+  },
+  {
+    "Prompt": "Please give me count of all the critical claims for this month",
+    "Query": "SELECT COUNT(*) AS CriticalCount FROM prd.claims_summary WHERE CriticalOrMinor = 'Critical' and MONTH([Occurrence Date]) = MONTH(GETDATE()) and YEAR([Occurrence Date]) = YEAR(GETDATE())"
+  },
+  {
+    "Prompt": "What is the customer code for which maximum number of claims are present?",
+    "Query": "SELECT TOP 1 [Customer Code], COUNT(*) AS ClaimsCount FROM prd.CLAIMS_SUMMARY WHERE trim([Customer Code]) <> '' AND [Customer Code] IS NOT NULL GROUP BY [Customer Code] ORDER BY ClaimsCount DESC"
+  },
+  {
+    "Prompt": "List down the customer code against which we can get maximum gross reserve",
+    "Query": "SELECT TOP 1 [Customer Code], SUM([Gross Reserve]) AS [Total Gross Reserve] FROM prd.CLAIMS_SUMMARY WHERE trim([Customer Code]) <> '' AND [Customer Code] IS NOT NULL GROUP BY [Customer Code] ORDER BY [Total Gross Reserve] DESC;"
+  },
+  {
+    "Prompt": "Please list down the top 5 customes that have highest gross reserve",
+    "Query": "SELECT TOP 5 [Customer Code], SUM([Gross Reserve]) AS [Total Gross Reserve] FROM prd.CLAIMS_SUMMARY WHERE trim([Customer Code]) <> '' AND [Customer Code] IS NOT NULL GROUP BY [Customer Code] ORDER BY [Total Gross Reserve] DESC;"
+  },
+  {
+    "Prompt": "What is the number of total open claims this week?",
+    "Query": "SELECT COUNT(*) AS [Number of Claims Opened This Week] FROM PRD.CLAIMS_SUMMARY WHERE [Status Flag] = 'O' AND DATEPART(WEEK, [Opened Date]) = DATEPART(WEEK, GETDATE()) AND DATEPART(YEAR, [Opened Date]) = DATEPART(YEAR, GETDATE())"
+  },
+  {
+    "Prompt": "Please tell me the number of closed claims for current calender week",
+    "Query": "SELECT COUNT(*) AS [Number of Claims Closed This Week] FROM PRD.CLAIMS_SUMMARY WHERE [Status Flag] = 'C' AND DATEPART(WEEK, [Close Date]) = DATEPART(WEEK, GETDATE()) AND DATEPART(YEAR, [Close Date]) = DATEPART(YEAR, GETDATE())"
+  },
+  {
+    "Prompt": "Please list down the claims with highest severity and their opened date",
+    "Query": "Select Distinct [Claim Number],[Opened Date],Severity from prd.CLAIMS_SUMMARY WHERE Severity = 5 ORDER BY [Opened Date] DESC"
+  },
+  {
+    "Prompt": "I need the count of claims against each driver code for last 6 months, can you please provide me that?",
+    "Query": "SELECT [Driver Code], COUNT(*) AS ClaimCount FROM prd.CLAIMS_SUMMARY WHERE [Opened Date] >= DATEADD(MONTH, -6, GETDATE()) AND [Driver Code] IS NOT NULL GROUP BY [Driver Code] ORDER BY ClaimCount DESC;"
+  },
+  {
+    "Prompt": "Show claim counts grouped by accident or incident type.",
+    "Query": "SELECT \n    [Accident or Incident Code], \n    COUNT(*) AS [Number Of Claims] \nFROM prd.CLAIMS_SUMMARY \nGROUP BY [Accident or Incident Code];"
+  },
+  {
+    "Prompt": "Write a SQL query to find the top cities/states with the most claims, including total claims, total cost, and average cost.",
+    "Query": "SELECT\n    [Claim City/State],\n    COUNT(*) AS [Total Claims],\n    SUM([Gross Reserve]) AS [Total Cost],\n    AVG([Gross Reserve]) AS [Average Cost]\nFROM PRD.CLAIMS_SUMMARY\nWHERE [Claim City] IS NOT NULL AND [Claim State] IS NOT NULL\nGROUP BY [Claim City/State]\nORDER BY [Total Cost] DESC;"
+  },
+  {
+    "Prompt": "Generate SQL to categorize claims by gross reserve amount: label each claim as 'Above' if reserve is 25,000 or more, otherwise 'Below'. Return claim number and this category.",
+    "Query": "SELECT \n    [Claim Number], \n    CASE \n        WHEN [Gross Reserve] >= 25000 THEN 'Above' \n        ELSE 'Below' \n    END AS ReserveCategory\nFROM PRD.CLAIMS_SUMMARY;"
+  },
+  {
+    "Prompt": "show the claims which gross reserve greater thatn 25000 and mark them as above and other below",
+    "Query": ""
+  },
+  {
+    "Prompt": "Can you please provide me the number of preventable claims for the current month?",
+    "Query": ""
+  },
+  {
+    "Prompt": "what is the number of preventabel clims in the second quartert of 2025?",
+    "Query": ""
+  },
+  {
+    "Prompt": "how can I reduce the number of preventable claims?",
+    "Query": ""
+  },
+  {
+    "Prompt": "how can I indetify patterns for prevefentable claims?",
+    "Query": ""
+  },
+  {
+    "Prompt": "which driver leader had the highest number of crash claims in q1 of 2024?",
+    "Query": ""
+  },
+  {
+    "Prompt": "tell me the top 1 driver leader had the highest number of crash claims in q1 of 2024?",
+    "Query": ""
+  },
+  {
+    "Prompt": "which driver leader had the highest number of crash claims in q1 of 2024?",
+    "Query": ""
+  },
+  {
+    "Prompt": "which non-null driver leader had the highest number of crash claims in q1 of 2024?",
+    "Query": ""
+  },
+  {
+    "Prompt": "which non-null driver leader had the highest number of crash claims in q1 of 2024?",
+    "Query": ""
+  },
+  {
+    "Prompt": "which driver leader had the highest number of crash claims in q1 of 2024 who is not null or none?",
+    "Query": ""
+  },
+  {
+    "Prompt": "which driver had the most orders in q3 2022?",
+    "Query": ""
+  },
+  {
+    "Prompt": "what were the coordinates of the driver jonathan brown on hismost highest gross reserve claim?",
+    "Query": ""
+  },
+  {
+    "Prompt": "what was the speed of JONATHAN BROWN on his highest claim gross reserve?",
+    "Query": ""
+  },
+  {
+    "Prompt": "Can you please tell me the number of claims by their severity? Also show me the total gross reserve and average gross reserve",
+    "Query": "SELECT \n    Severity,\n    COUNT([Claim Number]) as Total_Claims,\n    SUM([Gross Reserve]) as Total_Reserve,\n    AVG([Gross Reserve]) as Average_Reserve\nFROM PRD.CLAIMS_SUMMARY\nWHERE [Delete Flag] = 0 AND Severity IS NOT NULL\nGROUP BY Severity\nORDER BY Total_Reserve DESC"
+  },
+  {
+    "Prompt": "Please give me the count of claims month over month and their sum of gross reserce",
+    "Query": "SELECT \n    FORMAT([Occurrence Date], 'yyyy-MM') as Month,\n    COUNT([Claim Number]) as Number_of_Claims,\n    SUM([Gross Reserve]) as Total_Reserve\nFROM PRD.CLAIMS_SUMMARY\nWHERE [Delete Flag] = 0\nGROUP BY FORMAT([Occurrence Date], 'yyyy-MM')\nORDER BY Month DESC;"
+  },
+  {
+    "Prompt": "How many of our claims are preventable versus non-preventable? Show me the breakdown with reserves and percentages.",
+    "Query": "SELECT \n    [Preventable Flag],\n    COUNT([Claim Number]) as Claim_Count,\n    SUM([Gross Reserve]) as Total_Reserve,\n    AVG([Gross Reserve]) as Average_Reserve,\n    CAST(COUNT([Claim Number]) * 100.0 / SUM(COUNT([Claim Number])) OVER() AS DECIMAL(5,2)) as Percentage\nFROM PRD.CLAIMS_SUMMARY\nWHERE [Delete Flag] = 0 AND [Preventable Flag] IS NOT NULL\nGROUP BY [Preventable Flag];"
+  },
+  {
+    "Prompt": "Show me the total number of claims where there is Dot Reportable flag",
+    "Query": "SELECT \n    COUNT([Claim Number]) as Total_Claims\nFROM PRD.CLAIMS_SUMMARY\nWHERE [DOT Reportable Flag] = 1"
+  },
+  {
+    "Prompt": "Which customer has the lowest sum of gross reserve? The sum should not be zero",
+    "Query": "SELECT \n    TOP 1 [Customer Code],\n    SUM([Gross Reserve]) as Total_Reserve\nFROM PRD.CLAIMS_SUMMARY\nWHERE [Customer Code] IS NOT NULL\nGROUP BY [Customer Code]\nHAVING SUM([Gross Reserve]) > 0\nORDER BY SUM([Gross Reserve])"
+  },
+  {
+    "Prompt": "Identify commonalities in the crash claims for 2025 and give an yoy analysis with 2024",
+    "Query": ""
+  },
+  {
+    "Prompt": "Identify the commonalities between the different types of claims",
+    "Query": ""
+  },
+  {
+    "Prompt": "Identify the common patterns in the claim types and suggest remedies",
+    "Query": ""
+  },
+  {
+    "Prompt": "Which claim types had the highest gross reserve. Do a mom analysis for 2025",
+    "Query": "Select [type of claim], month([occurrence date]) as mnth, sum([gross reserve]) as gross_reserve from prd.claims_summary\nwhere year([occurrence date]) >= 2025\ngroup by [type of claim], month([occurrence date])\norder by sum([gross reserve]) desc"
+  },
+  {
+    "Prompt": "Which drivers are more likely to cause accidents?",
+    "Query": "Select [driver code], [driver name], count(distinct [claim number]) as count from prd.claims_Summary\ngroup by [driver code], [driver name]\norder by count(distinct [claim number]) desc"
+  },
+  {
+    "Prompt": "Who was the driver leader that showed a dowwnward trend in the claims by his drivers?",
+    "Query": ""
+  },
+  {
+    "Prompt": "Which driver leader was successful in coaching the drivers?",
+    "Query": "Same as above (essentially a downward trend in the number of claims for the number of drivers of a driver leader)"
+  },
+  {
+    "Prompt": "Please tell me the status of the claims right now, I want to know count of claims, how many are opened, closed and what is the average days opened for claims against their status",
+    "Query": "SELECT \n    [Status Flag],\n    COUNT([Claim Number]) as Claim_Count,\n    AVG(DATEDIFF(day, [Create Date], COALESCE([Close Date], GETDATE()))) as Avg_Days_Open\nFROM PRD.CLAIMS_SUMMARY\n--WHERE [Delete Flag] = 0\nGROUP BY [Status Flag];"
+  },
+  {
+    "Prompt": "I'm curious about how weather affects our claims. Can you break down claims and reserves by weather conditions?",
+    "Query": "SELECT \n    [Weather Conditions],\n    COUNT([Claim Number]) as Total_Claims,\n    SUM([Gross Reserve]) as Total_Reserve,\n    AVG([Gross Reserve]) as Average_Reserve\nFROM Warehouse.PRD.CLAIMS_SUMMARY\nWHERE [Delete Flag] = 0 AND [Weather Conditions] IS NOT NULL\nGROUP BY [Weather Conditions]\nORDER BY Total_Claims DESC;"
+  },
+  {
+    "Prompt": "How well are we doing on recovering claim costs? Show me our expected versus actual recovery amounts and how that compares to our total reserves, I need percentage of recovery rates as well by expecyed recovery amount and Gross Reserve",
+    "Query": "SELECT \n    COUNT([Claim Number]) as Total_Claims_With_Recovery,\n    SUM([Gross Reserve]) as Total_Reserve,\n    SUM([Expected Recovery Amount]) as Expected_Recovery,\n    SUM([Actual Recovered Amount]) as Actual_Recovery,\n    SUM([Paid Recovered Amount]) as Paid_Recovery,\n    CAST(SUM([Actual Recovered Amount]) * 100.0 / NULLIF(SUM([Expected Recovery Amount]), 0) AS DECIMAL(5,2)) as Recovery_Rate_Percentage,\n    CAST(SUM([Actual Recovered Amount]) * 100.0 / NULLIF(SUM([Gross Reserve]), 0) AS DECIMAL(5,2)) as Recovery_vs_Reserve_Percentage\nFROM Warehouse.PRD.CLAIMS_SUMMARY\nWHERE [Expected Recovery Amount] > 0;"
+  },
+  {
+    "Prompt": "List top 5 Claims  by Gross reserve",
+    "Query": "select top 5 [Claim Number] from PRD.Claims_Summary\norder by [Gross Reserve] desc"
+  },
+  {
+    "Prompt": "List all the active drivers for which drivers are not terminated",
+    "Query": "Select * from PRD.Driver_Master where Termination_Date is NULL"
+  },
+  {
+    "Prompt": "Which states are we seeing the most claims in? Show me a geographic breakdown of our claims and the reserves by state",
+    "Query": "SELECT \n    [Claim State],\n    COUNT([Claim Number]) as Total_Claims,\n    SUM([Gross Reserve]) as Total_Reserve,\n    AVG([Gross Reserve]) as Average_Reserve\nFROM Warehouse.PRD.CLAIMS_SUMMARY\nWHERE [Claim State] IS NOT NULL\nGROUP BY [Claim State]\nORDER BY Total_Claims DESC"
+  },
+  {
+    "Prompt": "List count of claims that occurred on Highway or Interstate",
+    "Query": "select COUNT([Claim Number]) AS Total_Claims From PRD.Claims_Summary where [Road Type] = 'HIGHWAY/INTERSTATE'"
+  }
+]
