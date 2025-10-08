@@ -512,30 +512,26 @@ Only use the approach this example has and change it in whatever way the user as
 - 
         **Example template:**
         ```
-            WITH Monthly_Claims AS (
-        SELECT
-            FORMAT([Occurrence Date], 'yyyy-MM') as Month,
-            YEAR([Occurrence Date]) as Year,
-            MONTH([Occurrence Date]) as Month_Number,
-            COUNT([Claim Number]) as Claims_Count,
-            SUM([Gross Reserve]) as Total_Reserve
-        FROM Warehouse.PRD.CLAIMS_SUMMARY
-        WHERE [Delete Flag] = 0 AND [Occurrence Date] IS NOT NULL
-        GROUP BY FORMAT([Occurrence Date], 'yyyy-MM'), YEAR([Occurrence Date]), MONTH([Occurrence Date])
-    )
-    SELECT
-        Month,
-        Claims_Count,
-        Total_Reserve,
-        LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number) as Previous_Month_Claims,
-        Claims_Count - LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number) as MoM_Change,
-        CASE
-            WHEN LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number) IS NULL THEN NULL
-            ELSE CAST((Claims_Count - LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number)) * 100.0 /
-                NULLIF(LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number), 0) AS DECIMAL(10,2))
-        END as MoM_Percentage_Change
-    FROM Monthly_Claims
-    ORDER BY Year DESC, Month_Number DESC;
+SELECT
+    FORMAT([Occurrence Date], 'yyyy-MM') as Month,
+    YEAR([Occurrence Date]) as Year,
+    MONTH([Occurrence Date]) as Month_Number,
+    COUNT([Claim Number]) as Claims_Count,
+    SUM([Gross Reserve]) as Total_Reserve,
+    LAG(COUNT([Claim Number]), 1) OVER (ORDER BY YEAR([Occurrence Date]), MONTH([Occurrence Date])) as Previous_Month_Claims,
+    COUNT([Claim Number]) - LAG(COUNT([Claim Number]), 1) OVER (ORDER BY YEAR([Occurrence Date]), MONTH([Occurrence Date])) as MoM_Change,
+    CASE
+        WHEN LAG(COUNT([Claim Number]), 1) OVER (ORDER BY YEAR([Occurrence Date]), MONTH([Occurrence Date])) IS NULL THEN NULL
+        ELSE CAST(
+            (COUNT([Claim Number]) - LAG(COUNT([Claim Number]), 1) OVER (ORDER BY YEAR([Occurrence Date]), MONTH([Occurrence Date]))) * 100.0 /
+            NULLIF(LAG(COUNT([Claim Number]), 1) OVER (ORDER BY YEAR([Occurrence Date]), MONTH([Occurrence Date])), 0)
+            AS DECIMAL(10,2)
+        )
+    END as MoM_Percentage_Change
+FROM Warehouse.PRD.CLAIMS_SUMMARY
+WHERE [Delete Flag] = 0 AND [Occurrence Date] IS NOT NULL
+GROUP BY FORMAT([Occurrence Date], 'yyyy-MM'), YEAR([Occurrence Date]), MONTH([Occurrence Date])
+ORDER BY Year DESC, Month_Number DESC;
 
         ```
 
