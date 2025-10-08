@@ -4,7 +4,7 @@ from langchain_openai import AzureChatOpenAI
 import re
 
 class SQLModifierNode:
-    """Node for intelligently modifying previous SQL queries based on user follow-up requests"""
+    """Node for intelligently modifying previous SQL queries based on user follow-up"""
     
     def __init__(self):
         self.llm = AzureChatOpenAI(
