@@ -76,7 +76,7 @@ class SQLModifierNode:
         
         try:
             # Modify the SQL query
-            modified_sql = self._modify_sql_for_period(base_sql, target_period, new_question)
+            modified_sql = self._modify_sql_for_period(base_sql, target_period, new_question, state)
             
             if modified_sql:
                 # Store the modified SQL in state
@@ -107,106 +107,238 @@ class SQLModifierNode:
         
         return state
     
-    def _modify_sql_for_period(self, base_sql: str, target_period: str, new_question: str) -> str:
-        """Modify SQL query to target a different time period"""
+    def _modify_sql_for_period(self, base_sql: str, target_period: str, new_question: str, state: Dict[str, Any] = None) -> str:
+        """Intelligently modify SQL query to target a different time period using LLM"""
         
-        # Define period modification mappings
-        period_mappings = {
-            "last_week": {
-                "description": "previous week",
-                "date_logic": "DATEADD(WEEK, -1, GETDATE())",
-                "range_start": "DATEADD(WEEK, -1, DATEADD(WEEK, DATEDIFF(WEEK, 0, GETDATE()), 0))",
-                "range_end": "DATEADD(WEEK, DATEDIFF(WEEK, 0, GETDATE()), 0)"
-            },
-            "last_month": {
-                "description": "previous month", 
-                "date_logic": "DATEADD(MONTH, -1, GETDATE())",
-                "range_start": "DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()) - 1, 0)",
-                "range_end": "DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()), 0)"
-            },
-            "this_month": {
-                "description": "current month",
-                "date_logic": "GETDATE()",
-                "range_start": "DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()), 0)",
-                "range_end": "DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()) + 1, 0)"
-            },
-            "yesterday": {
-                "description": "previous day",
-                "date_logic": "DATEADD(DAY, -1, GETDATE())",
-                "range_start": "CAST(DATEADD(DAY, -1, GETDATE()) AS DATE)",
-                "range_end": "CAST(GETDATE() AS DATE)"
-            },
-            "today": {
-                "description": "current day",
-                "date_logic": "GETDATE()",
-                "range_start": "CAST(GETDATE() AS DATE)",
-                "range_end": "CAST(DATEADD(DAY, 1, GETDATE()) AS DATE)"
-            }
-        }
+        print(f"[SQL_MODIFIER] Using intelligent LLM-based SQL modification for: '{target_period}'")
         
-        if target_period not in period_mappings:
-            return ""
+        # Check if we should use conversation history in prompts
+        use_history = False
+        conversation_context = ""
         
-        period_info = period_mappings[target_period]
+        if state:
+            orchestration = state.get("orchestration", {})
+            use_history = orchestration.get("use_history_in_prompts", False)
+            
+            if use_history:
+                print(f"[SQL_MODIFIER] Including conversation history in prompt for context")
+                # Get conversation history from orchestrator if available
+                try:
+                    from Graph_Flow.main_graph import get_global_orchestrator
+                    orchestrator = get_global_orchestrator()
+                    conversation_context = orchestrator._get_conversation_context(new_question)
+                except Exception as e:
+                    print(f"[SQL_MODIFIER] Could not get conversation context: {e}")
+                    conversation_context = ""
+            else:
+                print(f"[SQL_MODIFIER] Not using conversation history - treating as new unrelated query")
+        
+        # Build context section for prompt
+        context_section = ""
+        if use_history and conversation_context:
+            context_section = f"""
+        CONVERSATION CONTEXT:
+        {conversation_context}
+        
+        This modification request is a follow-up to previous queries. Use this context to understand the user's intent and maintain consistency with previous analysis.
+        """
         
         prompt = f"""
-        You are an expert SQL modifier. Your task is to modify an existing SQL query to target a different time period.
+        You are an expert SQL modifier with deep understanding of temporal expressions. Your task is to intelligently modify an existing SQL query to target a different time period based on natural language.
         
         ORIGINAL SQL QUERY:
         {base_sql}
         
-        TARGET PERIOD: {period_info['description']}
-        NEW USER QUESTION: "{new_question}"
+        NEW USER REQUEST: "{new_question}"
+        TARGET TEMPORAL REFERENCE: "{target_period}"
+        {context_section}
         
-        MODIFICATION RULES:
-        1. Keep the same SELECT, FROM, GROUP BY, and ORDER BY structure
-        2. Only modify the date/time filtering conditions in the WHERE clause
-        3. Use SQL Server syntax and functions
-        4. For {target_period}, use these date ranges:
-           - Range start: {period_info['range_start']}
-           - Range end: {period_info['range_end']}
+        INTELLIGENT MODIFICATION INSTRUCTIONS:
         
-        COMMON PATTERNS TO MODIFY:
+        1. ANALYZE the original SQL query to understand:
+           - What date/time columns are being filtered
+           - What time period the original query targets
+           - The current date filtering logic
         
-        For "this week" → "last week":
-        - Replace: DATEPART(WEEK, [date_column]) = DATEPART(WEEK, GETDATE())
-        - With: [date_column] >= {period_info['range_start']} AND [date_column] < {period_info['range_end']}
+        2. INTERPRET the target temporal reference intelligently:
+           - "this_week" = current week (Monday to Sunday)
+           - "last_week" = previous week  
+           - "this_month" = current calendar month
+           - "last_month" = previous calendar month
+           - "this_quarter" = current quarter (Q1, Q2, Q3, Q4)
+           - "last_quarter" = previous quarter
+           - "this_year" = current calendar year
+           - "last_year" = previous calendar year
+           - "today" = current date only
+           - "yesterday" = previous date only
+           - Handle variations like "current week", "past month", "earlier this quarter", etc.
         
-        For "this month" → "last month":
-        - Replace: MONTH([date_column]) = MONTH(GETDATE()) AND YEAR([date_column]) = YEAR(GETDATE())
-        - With: [date_column] >= {period_info['range_start']} AND [date_column] < {period_info['range_end']}
+        3. GENERATE appropriate SQL Server date functions:
+           - Use DATEADD, DATEDIFF, DATEPART functions
+           - Create proper date ranges with >= and < comparisons
+           - Handle edge cases (month boundaries, year boundaries, etc.)
         
-        For any DATEADD/DATEPART patterns:
-        - Identify the date column being filtered
-        - Replace the time logic with the appropriate range for {target_period}
+        4. PRESERVE the complete original query structure:
+           - Keep all SELECT columns exactly the same
+           - Maintain FROM clause and JOINs
+           - Preserve WHERE conditions (except date filters)
+           - Keep GROUP BY clause identical
+           - Include complete ORDER BY clause
+        
+        EXAMPLES of intelligent temporal mapping:
+        
+        Original: WHERE [Date] >= DATEADD(QUARTER, -1, GETDATE())
+        Target: "this quarter" 
+        Result: WHERE [Date] >= DATEADD(QUARTER, DATEDIFF(QUARTER, 0, GETDATE()), 0) AND [Date] < DATEADD(QUARTER, DATEDIFF(QUARTER, 0, GETDATE()) + 1, 0)
+        
+        Original: WHERE MONTH([Date]) = MONTH(GETDATE())
+        Target: "last month"
+        Result: WHERE [Date] >= DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()) - 1, 0) AND [Date] < DATEADD(MONTH, DATEDIFF(MONTH, 0, GETDATE()), 0)
         
         CRITICAL REQUIREMENTS:
-        - Preserve all column names, table names, and aliases exactly
-        - Keep the same aggregation logic (COUNT, SUM, etc.)
-        - Only modify date filtering conditions
-        - Use proper SQL Server date functions
-        - Ensure the modified query is syntactically correct
+        - Return a COMPLETE, executable SQL query
+        - MUST include the full ORDER BY clause from the original query
+        - Only modify date/time filtering conditions  
+        - Use proper SQL Server syntax
+        - Handle any temporal expression intelligently
+        - Ensure syntactic correctness
+        - DO NOT truncate or abbreviate any part of the query
+        - The query MUST end with a complete ORDER BY clause (e.g., "ORDER BY [Column] DESC")
         
-        Return ONLY the modified SQL query, no explanations or markdown.
+        VALIDATION CHECK: Your response must contain a complete ORDER BY clause that ends with DESC or ASC.
+        
+        Return ONLY the complete modified SQL query, no explanations or markdown. Ensure the ORDER BY clause is complete.
         """
         
         try:
+            print(f"[SQL_MODIFIER] Sending prompt to LLM for SQL modification...")
             response = self.llm.invoke(prompt)
             modified_sql = response.content.strip()
             
+            print(f"[SQL_MODIFIER] LLM Response length: {len(modified_sql)} characters")
+            print(f"[SQL_MODIFIER] LLM Response preview: {modified_sql[:200]}...")
+            
+            # Check if response looks truncated
+            if not modified_sql.strip().upper().endswith(('DESC', 'ASC', ';')):
+                print(f"[SQL_MODIFIER] WARNING: Response might be truncated - doesn't end with ORDER BY clause")
+            
             # Clean up any markdown formatting
+            original_length = len(modified_sql)
             if modified_sql.startswith("```sql"):
                 modified_sql = modified_sql[6:]
+                print(f"[SQL_MODIFIER] Removed ```sql prefix")
             elif modified_sql.startswith("```"):
                 modified_sql = modified_sql[3:]
+                print(f"[SQL_MODIFIER] Removed ``` prefix")
             if modified_sql.endswith("```"):
                 modified_sql = modified_sql[:-3]
+                print(f"[SQL_MODIFIER] Removed ``` suffix")
             
-            return modified_sql.strip()
+            cleaned_sql = modified_sql.strip()
+            print(f"[SQL_MODIFIER] Cleaned SQL length: {len(cleaned_sql)} characters (was {original_length})")
+            
+            # Enhanced ORDER BY detection and recovery
+            cleaned_upper = cleaned_sql.upper()
+            has_complete_order_by = 'ORDER BY' in cleaned_upper and (
+                cleaned_upper.endswith(' DESC') or 
+                cleaned_upper.endswith(' ASC') or
+                cleaned_upper.endswith('DESC') or
+                cleaned_upper.endswith('ASC')
+            )
+            
+            # Check for incomplete ORDER BY (like "ORDER ..." or just "ORDER")
+            has_incomplete_order = (
+                cleaned_upper.endswith('ORDER') or 
+                cleaned_upper.endswith('ORDER ...') or
+                cleaned_upper.endswith('ORDER BY') or
+                'ORDER ...' in cleaned_upper
+            )
+            
+            if not has_complete_order_by or has_incomplete_order:
+                print(f"[SQL_MODIFIER] ERROR: Modified SQL has incomplete/missing ORDER BY clause!")
+                print(f"[SQL_MODIFIER] Current SQL ends with: '{cleaned_sql[-50:]}'")
+                print(f"[SQL_MODIFIER] Attempting to recover ORDER BY from original query...")
+                
+                # Remove incomplete ORDER BY if present
+                if has_incomplete_order:
+                    # Remove trailing incomplete ORDER BY parts
+                    for incomplete in ['ORDER ...', 'ORDER BY', 'ORDER']:
+                        if cleaned_sql.upper().endswith(incomplete):
+                            cleaned_sql = cleaned_sql[:-len(incomplete)].rstrip()
+                            print(f"[SQL_MODIFIER] Removed incomplete '{incomplete}' from end")
+                            break
+                
+                # Extract ORDER BY clause from original query
+                base_sql_upper = base_sql.upper()
+                if 'ORDER BY' in base_sql_upper:
+                    order_by_start = base_sql_upper.find('ORDER BY')
+                    original_order_by = base_sql[order_by_start:].strip()
+                    
+                    # Append the complete ORDER BY clause
+                    cleaned_sql = cleaned_sql.rstrip() + ' ' + original_order_by
+                    print(f"[SQL_MODIFIER] Recovered ORDER BY clause: {original_order_by}")
+                    print(f"[SQL_MODIFIER] Final SQL length: {len(cleaned_sql)} characters")
+                else:
+                    print(f"[SQL_MODIFIER] WARNING: No ORDER BY clause found in original query either!")
+            else:
+                print(f"[SQL_MODIFIER] ORDER BY clause appears complete")
+            
+            if not cleaned_sql:
+                print(f"[SQL_MODIFIER] WARNING: Cleaned SQL is empty!")
+                return ""
+            
+            # Final validation - ensure the query is complete and executable
+            final_validation = self._validate_sql_completeness(cleaned_sql, base_sql)
+            if not final_validation["is_complete"]:
+                print(f"[SQL_MODIFIER] FINAL VALIDATION FAILED: {final_validation['reason']}")
+                print(f"[SQL_MODIFIER] Attempting final recovery...")
+                cleaned_sql = final_validation.get("recovered_sql", cleaned_sql)
+            
+            print(f"[SQL_MODIFIER] Final SQL query length: {len(cleaned_sql)} characters")
+            print(f"[SQL_MODIFIER] Final SQL preview: {cleaned_sql[:100]}...{cleaned_sql[-50:]}")
+            
+            return cleaned_sql
             
         except Exception as e:
             print(f"[SQL_MODIFIER] Error modifying SQL: {str(e)}")
             return ""
+    
+    def _validate_sql_completeness(self, sql: str, original_sql: str) -> Dict[str, Any]:
+        """Validate that the SQL query is complete and executable"""
+        
+        sql_upper = sql.upper()
+        
+        # Check for required SQL components
+        has_select = 'SELECT' in sql_upper
+        has_from = 'FROM' in sql_upper
+        has_order_by = 'ORDER BY' in sql_upper
+        ends_properly = sql_upper.endswith((' DESC', ' ASC', 'DESC', 'ASC'))
+        
+        if not has_select:
+            return {"is_complete": False, "reason": "Missing SELECT clause"}
+        
+        if not has_from:
+            return {"is_complete": False, "reason": "Missing FROM clause"}
+        
+        if not has_order_by:
+            # Try to recover ORDER BY from original
+            original_upper = original_sql.upper()
+            if 'ORDER BY' in original_upper:
+                order_by_start = original_upper.find('ORDER BY')
+                original_order_by = original_sql[order_by_start:].strip()
+                recovered_sql = sql.rstrip() + ' ' + original_order_by
+                return {
+                    "is_complete": False, 
+                    "reason": "Missing ORDER BY clause",
+                    "recovered_sql": recovered_sql
+                }
+            else:
+                return {"is_complete": False, "reason": "Missing ORDER BY clause and none in original"}
+        
+        if not ends_properly:
+            return {"is_complete": False, "reason": "ORDER BY clause incomplete - doesn't end with DESC/ASC"}
+        
+        return {"is_complete": True, "reason": "SQL appears complete"}
     
     def _store_sql_in_history(self, state: Dict[str, Any], user_query: str, sql_query: str, source: str) -> None:
         """Store modified SQL query in conversation history"""

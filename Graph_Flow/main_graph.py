@@ -45,6 +45,30 @@ class StartNode:
         """
         self.logger.node_initialized("Initializing Hirschbach Risk Intelligence conversation")
 
+        # Debug: Check what state we're starting with
+        print(f"[START_NODE DEBUG] Received state keys: {list(state.keys())}")
+        print(f"[START_NODE DEBUG] generated_sql present: {'generated_sql' in state}")
+        print(f"[START_NODE DEBUG] sql_validated present: {'sql_validated' in state}")
+        print(f"[START_NODE DEBUG] llm_check_result present: {'llm_check_result' in state}")
+        print(f"[START_NODE DEBUG] sql_generation_status present: {'sql_generation_status' in state}")
+        
+        if "generated_sql" in state:
+            print(f"[START_NODE DEBUG] OLD generated_sql found: {state['generated_sql'][:100]}...")
+        if "sql_generation_status" in state:
+            print(f"[START_NODE DEBUG] OLD sql_generation_status found: {state['sql_generation_status']}")
+
+        # FORCE CLEAR problematic fields that might persist between queries
+        problematic_fields = ["generated_sql", "sql_validated", "llm_check_result", "sql_generation_status", 
+                            "sql_generation_result", "sql_generation_error"]
+        cleared_fields = []
+        for field in problematic_fields:
+            if field in state:
+                del state[field]
+                cleared_fields.append(field)
+        
+        if cleared_fields:
+            print(f"[START_NODE DEBUG] FORCE CLEARED problematic fields: {cleared_fields}")
+
         # Ensure essential fields exist
         if "messages" not in state:
             state["messages"] = []
@@ -127,8 +151,8 @@ class EndNode:
             "sql_modification_request",  # SQL modification request for processing
             "orchestration",      # Orchestration metadata
             "sql_modification_completed",  # SQL modification completion status
-            "generated_sql",      # Generated/modified SQL query
-            "sql_validated",      # SQL validation status
+            # REMOVED: "generated_sql" and "sql_validated" should be cleared between queries
+            # to prevent old SQL from interfering with new queries
             "top_kpi"            # Top KPI (may contain modified SQL)
         }
         
@@ -195,6 +219,23 @@ class EndNode:
         
         return "\n".join(summary_parts)
 
+# Global orchestrator instance for persistence
+_global_orchestrator_instance = None
+
+def get_global_orchestrator():
+    """
+    Get the global orchestrator instance for conversation history management.
+    
+    Returns:
+        HirschbachOrchestrator instance
+    """
+    global _global_orchestrator_instance
+    if _global_orchestrator_instance is None:
+        from Nodes.orchestrator import HirschbachOrchestrator
+        _global_orchestrator_instance = HirschbachOrchestrator()
+        print("[MAIN_GRAPH DEBUG] Created global orchestrator instance")
+    return _global_orchestrator_instance
+
 # Factory function to create the main graph
 def create_main_graph():
     """
@@ -210,10 +251,11 @@ def create_main_graph():
     start_node = StartNode()
     end_node = EndNode()
     
-    # Simple node creation - no logging overhead
+    # Use the global orchestrator instance to maintain conversation history
     def get_orchestrator():
-        from Nodes.orchestrator import HirschbachOrchestrator
-        return HirschbachOrchestrator()
+        orchestrator = get_global_orchestrator()
+        print(f"[MAIN_GRAPH DEBUG] Using orchestrator instance with {len(orchestrator.conversation_history)} messages in history")
+        return orchestrator
     
     def get_kpi_retrieval():
         from Nodes.kpi_retrieval import KPIRetrievalNode
@@ -302,15 +344,23 @@ def create_main_graph():
         # Respect explicit end routing first
         next_node = state.get("next_node")
         if next_node == "end":
+            print(f"[GRAPH_ROUTING DEBUG] Routing to end (explicit)")
             return "end"
+        
         llm_check_result = state.get("llm_check_result", {})
         decision_type = llm_check_result.get("decision_type", "not_relevant")
         
+        print(f"[GRAPH_ROUTING DEBUG] LLM checker result: {llm_check_result}")
+        print(f"[GRAPH_ROUTING DEBUG] Decision type: {decision_type}")
+        
         if decision_type == "perfect_match":
+            print(f"[GRAPH_ROUTING DEBUG] Routing to azure_retrieval (perfect_match)")
             return "azure_retrieval"
         elif decision_type == "needs_minor_edit":
+            print(f"[GRAPH_ROUTING DEBUG] Routing to kpi_editor (needs_minor_edit)")
             return "kpi_editor"
         else:  # not_relevant
+            print(f"[GRAPH_ROUTING DEBUG] Routing to sql_generation (not_relevant)")
             return "sql_generation"
     
     workflow.add_conditional_edges(

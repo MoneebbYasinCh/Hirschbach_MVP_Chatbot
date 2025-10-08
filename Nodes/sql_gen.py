@@ -45,49 +45,58 @@ class SQLGenerationNode:
             Updated state with generated SQL
         """
         self.logger.node_started("Processing SQL generation")
-
-        # Get user input from the latest message (same pattern as KPI editor)
-        messages = state.get("messages", [])
-        if not messages:
-            self.logger.node_error("No messages found in state")
-            state["sql_generation_status"] = "error"
-            state["sql_generation_error"] = "No messages found in state"
-            return state
-
-        # Get user input from the LAST HumanMessage (most recent query)
-        user_query = ""
-        conversation_context = []
-        human_messages = []
         
-        # First, collect all messages and separate human messages
-        for msg in messages:
-            if hasattr(msg, 'content') and hasattr(msg, '__class__'):
-                if 'Human' in str(msg.__class__):
-                    human_messages.append(msg.content)
-                elif 'AI' in str(msg.__class__):
-                    # Include relevant AI responses for context
-                    ai_content = msg.content[:100] + "..." if len(msg.content) > 100 else msg.content
-                    conversation_context.append(f"Previous response: {ai_content}")
+        # DEBUG: Check if SQL generation should be running
+        llm_check_result = state.get("llm_check_result", {})
+        decision_type = llm_check_result.get("decision_type", "unknown")
+        print(f"[SQL_GENERATION DEBUG] Called with LLM decision: {decision_type}")
+        print(f"[SQL_GENERATION DEBUG] LLM check result: {llm_check_result}")
         
-        # Current query is the LAST (most recent) human message
-        if human_messages:
-            user_query = human_messages[-1]  # Last human message is current query
-            # Previous human messages are context
-            for prev_msg in human_messages[:-1]:
-                conversation_context.append(f"Previous query: {prev_msg}")
+        if decision_type == "perfect_match":
+            print(f"[SQL_GENERATION WARNING] SQL Generation should NOT run for perfect_match! This is a bug.")
+        elif decision_type == "needs_minor_edit":
+            print(f"[SQL_GENERATION WARNING] SQL Generation should NOT run for needs_minor_edit! Should go to KPI editor.")
+        else:
+            print(f"[SQL_GENERATION DEBUG] Correctly running for decision: {decision_type}")
 
-        if not user_query:
-            # Fallback: use the last message
-            user_query = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
+        # Check if we should use conversation history or just current query
+        orchestration = state.get("orchestration", {})
+        use_history_in_prompts = orchestration.get("use_history_in_prompts", True)  # Default to True for backward compatibility
         
-        # Build context string for better SQL generation
-        context_text = "\n".join(conversation_context[-6:]) if conversation_context else ""  # Last 6 exchanges
+        if use_history_in_prompts:
+            print("[SQL_GENERATION] Using conversation history - extracting from messages")
+            # Get user input from the latest message (same pattern as KPI editor)
+            messages = state.get("messages", [])
+            if not messages:
+                self.logger.node_error("No messages found in state")
+                state["sql_generation_status"] = "error"
+                state["sql_generation_error"] = "No messages found in state"
+                return state
+
+            # Get user input from the first HumanMessage (proper LangGraph pattern)
+            user_query = ""
+            for msg in messages:
+                if hasattr(msg, 'content') and hasattr(msg, '__class__'):
+                    if 'Human' in str(msg.__class__):
+                        user_query = msg.content
+                        break
+
+            if not user_query:
+                # Fallback: use the last message
+                user_query = messages[-1].content if hasattr(messages[-1], 'content') else str(messages[-1])
+        else:
+            print("[SQL_GENERATION] NOT using conversation history - using current query only")
+            # Use only the current user query from state (no conversation history)
+            user_query = state.get("user_query", "")
 
         if not user_query:
             self.logger.node_error("No user query found in state")
             state["sql_generation_status"] = "error"
             state["sql_generation_error"] = "No user query found in state"
             return state
+        
+        print(f"[SQL_GENERATION] Processing query: {user_query[:100]}...")
+        print(f"[SQL_GENERATION] Use history in prompts: {use_history_in_prompts}")
         
         # Get metadata results
         metadata_results = state.get("metadata_rag_results", [])
@@ -113,8 +122,8 @@ class SQLGenerationNode:
             # Step 3: Map user intent to exact values
             mapped_values = self._map_user_intent_to_values(user_query, needed_columns, entity_mapping_data)
             
-            # Step 4: Generate final SQL with exact values and conversation context
-            final_sql = self._generate_final_sql(user_query, needed_columns, metadata_results, mapped_values, context_text)
+            # Step 4: Generate final SQL with exact values
+            final_sql = self._generate_final_sql(user_query, needed_columns, metadata_results, mapped_values)
             
             # Update state
             state["sql_generation_status"] = "completed"
@@ -126,9 +135,6 @@ class SQLGenerationNode:
                 "needed_columns": needed_columns,
                 "mapped_values": mapped_values
             }
-            
-            # Store SQL query in history for context preservation
-            self._store_sql_in_history(state, user_query, final_sql, "sql_generation")
             
             self.logger.node_completed("SQL generation completed successfully")
             log_sql_generation("sql_gen", final_sql)
@@ -359,7 +365,7 @@ class SQLGenerationNode:
             self.logger.node_warning(f"Error mapping user intent to values: {str(e)}")
             return {}
     
-    def _generate_final_sql(self, user_query: str, needed_columns: List[str], metadata_results: List[Dict], mapped_values: Dict[str, str], context_text: str = "") -> str:
+    def _generate_final_sql(self, user_query: str, needed_columns: List[str], metadata_results: List[Dict], mapped_values: Dict[str, str]) -> str:
         """Generate final SQL with exact values (like KPI editor)"""
         
         # Format metadata for prompt - ONLY use needed columns
@@ -398,17 +404,8 @@ You are an expert SQL query generator specializing in SQL Server syntax. Your ta
 - Do NOT substitute similar-sounding column names
 - Use the EXACT column names provided - no substitutions or variations
 
-## CONVERSATION CONTEXT
-{context_text if context_text else "No previous conversation context available."}
-
 ## Your Mission
 Analyze the user's request step-by-step and generate a SQL query that accurately fulfills their requirements while adhering to all formatting, filtering, and structural rules defined below.
-
-IMPORTANT: Consider the conversation context when interpreting the user's request. Look for:
-- References to previous queries or results
-- Follow-up questions that build on earlier requests
-- Implied filters or conditions based on conversation history
-- Context clues that help clarify ambiguous requests
 
 ---
 
@@ -416,10 +413,8 @@ IMPORTANT: Consider the conversation context when interpreting the user's reques
 
 ### Step 1: Understand the User Request
 - Parse the **USER REQUEST**: "{user_query}"
-- Consider the **CONVERSATION CONTEXT** above for additional clarity
 - Identify what data the user wants to retrieve
 - Determine any filtering conditions, aggregations, or groupings needed
-- Look for context-dependent references (e.g., "that data", "those results", "also show")
 
         ### Step 2: Review Available Schema
         - **AVAILABLE COLUMNS**: {metadata_text}
@@ -435,6 +430,7 @@ IMPORTANT: Consider the conversation context when interpreting the user's reques
 - **Table Name**: Use `PRD.CLAIMS_SUMMARY`
 - **Column Names with Spaces**: Wrap in square brackets: `[Column Name]`
 - **Date Functions**: Use SQL Server functions like `DATEPART`, `YEAR`, `MONTH` instead of `DATE_TRUNC`
+
 
 ### Step 3.5: CRITICAL SQL Server Syntax Requirements
 **LIMIT CLAUSE REPLACEMENT (CRITICAL):**
@@ -499,39 +495,51 @@ When CODE and NAME column pairs exist (e.g., `[Entity Manager]` and `[Entity Man
         ```
         WHERE [Entity Manager] = 'some_value'  -- Filter by CODE
           AND [Entity Manager Name] IS NOT NULL  -- NULL check on NAME
-        GROUP BY [Entity Manager]  -- Group by CODE ONLY (never group by NAME)
+        GROUP BY [Entity Manager], [Entity Manager Name]
         SELECT [Entity Manager], [Entity Manager Name]  -- Display both
         ```
-
-        **WRONG Example (NEVER do this):**
-        ```
-        GROUP BY [Entity Manager], [Entity Manager Name]  -- ❌ WRONG! Don't group by NAME columns
-        ```
-
+**REMEMBER:** CODE columns are unique identifiers for grouping. NAME columns are human-readable labels for display only.
 Apply this same pattern to ALL code/name column pairs.
 
-### Step 6: Apply CRITICAL GROUP BY RULE
-**Default Behavior (ALWAYS follow unless explicitly overridden):**
-- **ALWAYS use ONLY CODE columns in GROUP BY**
-- **NEVER use NAME columns in GROUP BY** (unless user explicitly requests grouping by name)
-- **SELECT both CODE and NAME** for display purposes
-- **CRITICAL:** NAME columns are for display only - they should NEVER appear in GROUP BY clauses
+### Step 6: Apply CRITICAL Trend Analysis\\MOM\\YOY RULE
+**Default Behavior when user mentions something like query to show trend analysis, MOM, YOY or upward/downward trend(ALWAYS follow unless explicitly overridden):**
+This is just a generic example for month on month analysis and for the number of claims and total reserve amounts change respectively.
+Only use the approach this example has and change it in whatever way the user asks for. But also change it if anything else is mentioned like claim type or something, just use logic and generate a new sql query.
 
-        **Correct Pattern:**
+- Never Use Window Functions After Aggregation Without Including the ORDER Columns in the GROUP BY
+- Always Keep Columns Used in ORDER BY or PARTITION BY Within the Same Aggregation Level.
+- Separate Aggregation and Windowing Into Different Query Layers
+- 
+        **Example template:**
         ```
-        GROUP BY [Entity Code]
-        SELECT [Entity Code], [Entity Name]
+            WITH Monthly_Claims AS (
+        SELECT
+            FORMAT([Occurrence Date], 'yyyy-MM') as Month,
+            YEAR([Occurrence Date]) as Year,
+            MONTH([Occurrence Date]) as Month_Number,
+            COUNT([Claim Number]) as Claims_Count,
+            SUM([Gross Reserve]) as Total_Reserve
+        FROM Warehouse.PRD.CLAIMS_SUMMARY
+        WHERE [Delete Flag] = 0 AND [Occurrence Date] IS NOT NULL
+        GROUP BY FORMAT([Occurrence Date], 'yyyy-MM'), YEAR([Occurrence Date]), MONTH([Occurrence Date])
+    )
+    SELECT
+        Month,
+        Claims_Count,
+        Total_Reserve,
+        LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number) as Previous_Month_Claims,
+        Claims_Count - LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number) as MoM_Change,
+        CASE
+            WHEN LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number) IS NULL THEN NULL
+            ELSE CAST((Claims_Count - LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number)) * 100.0 /
+                NULLIF(LAG(Claims_Count, 1) OVER (ORDER BY Year, Month_Number), 0) AS DECIMAL(10,2))
+        END as MoM_Percentage_Change
+    FROM Monthly_Claims
+    ORDER BY Year DESC, Month_Number DESC;
+
         ```
 
-        **WRONG Pattern (NEVER do this):**
-        ```
-        GROUP BY [Entity Code], [Entity Name]  -- ❌ WRONG! NAME columns don't belong in GROUP BY
-        ```
-
-**Exception:** Only group by NAME if user explicitly says "group by [name column]" or "group by name"
-
-**REMEMBER:** CODE columns are unique identifiers for grouping. NAME columns are human-readable labels for display only.
-
+              
 ### Step 7: Enforce Data Quality Filters
 Apply appropriate null and empty value filters based on data type:
 
@@ -600,29 +608,3 @@ Return **ONLY** the SQL query. No explanations, no markdown code blocks, no addi
         except Exception as e:
             self.logger.node_error("Error generating SQL", e)
             return ""
-    
-    def _store_sql_in_history(self, state: Dict[str, Any], user_query: str, sql_query: str, source: str) -> None:
-        """Store generated SQL query in conversation history for context preservation"""
-        if "sql_query_history" not in state:
-            state["sql_query_history"] = []
-        
-        # Create SQL history entry
-        sql_entry = {
-            "user_question": user_query,
-            "generated_sql": sql_query,
-            "source": source,  # "sql_generation" or "kpi_editor"
-            "timestamp": self._get_current_timestamp()
-        }
-        
-        state["sql_query_history"].append(sql_entry)
-        
-        # Keep only last 10 queries to avoid state bloat
-        if len(state["sql_query_history"]) > 10:
-            state["sql_query_history"] = state["sql_query_history"][-10:]
-        
-        print(f"[SQL_GEN] Stored SQL query in history: {user_query[:50]}...")
-    
-    def _get_current_timestamp(self) -> str:
-        """Get current timestamp for SQL history"""
-        from datetime import datetime
-        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
